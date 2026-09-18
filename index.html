@@ -148,7 +148,6 @@
   .layer-item { display: flex; align-items: center; gap: 8px; padding: 6px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); cursor: pointer; }
   .layer-item.active { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent) inset; }
   .layer-item.dragging { opacity: .4; }
-  .layer-item.drop-target { border-color: var(--accent-deep); border-style: dashed; }
   .layer-vis { width: 26px; height: 26px; flex: none; border-radius: 6px; border: 1px solid var(--line-strong); background: var(--panel);
     display: flex; align-items: center; justify-content: center; color: var(--ink); cursor: pointer; }
   .layer-vis.off { color: var(--ink-soft); opacity: .45; }
@@ -158,7 +157,11 @@
   .layer-thumb canvas { width: 100%; height: 100%; display: block; }
   .layer-name { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .layer-name input { width: 100%; border: 1px solid var(--accent); border-radius: 4px; font-size: 12.5px; font-weight: 700; padding: 2px 4px; background: var(--panel); color: var(--ink); }
-  .drag-handle { color: var(--ink-soft); cursor: grab; flex: none; display: flex; }
+  .drag-handle { color: var(--ink-soft); cursor: grab; flex: none; display: flex; align-items: center; justify-content: center;
+    touch-action: none; width: 22px; height: 32px; margin: -6px 0 -6px -2px; }
+  .drag-handle:active { cursor: grabbing; }
+  .layer-item.drop-above { box-shadow: inset 0 3px 0 var(--accent-deep); }
+  .layer-item.drop-below { box-shadow: inset 0 -3px 0 var(--accent-deep); }
   .layer-ref { width: 20px; height: 20px; flex: none; border-radius: 5px; border: 1.5px solid var(--line-strong); background: var(--panel);
     cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 900; color: transparent; }
   .layer-ref:hover { border-color: var(--accent); background: var(--accent-soft); }
@@ -727,8 +730,8 @@
   function renderLayerList(){
     const list=document.getElementById('layerList'); list.innerHTML='';
     for(let i=layers.length-1;i>=0;i--){ const l=layers[i];
-      const item=document.createElement('div'); item.className='layer-item'+(l.id===activeId?' active':''); item.dataset.id=l.id; item.draggable=true;
-      const handle=document.createElement('div'); handle.className='drag-handle';
+      const item=document.createElement('div'); item.className='layer-item'+(l.id===activeId?' active':''); item.dataset.id=l.id;
+      const handle=document.createElement('div'); handle.className='drag-handle'; handle.title='ドラッグで並べ替え';
       handle.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg>';
       const vis=document.createElement('div'); vis.className='layer-vis'+(l.visible?'':' off');
       vis.innerHTML=l.visible?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg>';
@@ -741,18 +744,59 @@
       const ref=document.createElement('div'); ref.className='layer-ref'+(l.ref?' on':''); ref.title='塗りつぶしの参照にする（この線を境界として使う）';
       ref.addEventListener('click',ev=>{ ev.stopPropagation(); l.ref=!l.ref; renderLayerList(); });
       item.appendChild(handle); item.appendChild(vis); item.appendChild(thumbBox); item.appendChild(name); item.appendChild(ref);
-      item.addEventListener('click',()=>{ activeId=l.id; renderLayerList(); syncLayerControls(); });
-      item.addEventListener('dragstart',ev=>{ item.classList.add('dragging'); ev.dataTransfer.setData('text/plain',l.id); });
-      item.addEventListener('dragend',()=>{ item.classList.remove('dragging'); document.querySelectorAll('.layer-item').forEach(x=>x.classList.remove('drop-target')); });
-      item.addEventListener('dragover',ev=>{ ev.preventDefault(); item.classList.add('drop-target'); });
-      item.addEventListener('dragleave',()=>item.classList.remove('drop-target'));
-      item.addEventListener('drop',ev=>{ ev.preventDefault(); item.classList.remove('drop-target'); const fromId=+ev.dataTransfer.getData('text/plain'), toId=l.id;
-        if(fromId===toId)return; const fromIdx=layers.findIndex(x=>x.id===fromId); const [moved]=layers.splice(fromIdx,1);
-        const toIdx=layers.findIndex(x=>x.id===toId); layers.splice(toIdx,0,moved); renderLayerList(); redraw(); pushHistory(); });
+      item.addEventListener('click',()=>{ if(layerDrag && layerDrag.moved) return; activeId=l.id; renderLayerList(); syncLayerControls(); });
+      handle.addEventListener('pointerdown',ev=>{ ev.preventDefault(); ev.stopPropagation(); startLayerDrag(ev,l.id,item,handle); });
       list.appendChild(item);
     }
     syncLayerControls();
   }
+
+  // ---------- pointer-based layer reordering (works with pen / touch / mouse) ----------
+  let layerDrag=null;
+  function startLayerDrag(e,id,item,handle){
+    layerDrag={ id, item, handle, startY:e.clientY, active:false, moved:false, targetId:null, below:false, pid:e.pointerId };
+    try{ handle.setPointerCapture(e.pointerId); }catch(_){}
+  }
+  function clearDropMarks(){ document.querySelectorAll('#layerList .layer-item').forEach(x=>x.classList.remove('drop-above','drop-below')); }
+  function updateLayerDropTarget(clientY){
+    clearDropMarks();
+    const items=Array.from(document.querySelectorAll('#layerList .layer-item'));
+    let target=null, below=false;
+    for(const el of items){ const r=el.getBoundingClientRect();
+      if(clientY < r.top + r.height/2){ target=el; below=false; break; }
+      target=el; below=true;
+    }
+    if(target){ target.classList.add(below?'drop-below':'drop-above'); layerDrag.targetId=+target.dataset.id; layerDrag.below=below; }
+    else { layerDrag.targetId=null; }
+  }
+  function reorderLayer(dragId,targetId,below){
+    if(targetId==null) return;
+    const visual=layers.slice().reverse();               // 画面表示順(上→下)
+    const dragObj=visual.find(x=>x.id===dragId); if(!dragObj) return;
+    visual.splice(visual.indexOf(dragObj),1);
+    let ti=visual.findIndex(x=>x.id===targetId);
+    if(ti<0){ visual.push(dragObj); } else { visual.splice(below?ti+1:ti,0,dragObj); }
+    layers=visual.reverse();
+    activeId=dragId; renderLayerList(); redraw(); pushHistory();
+  }
+  function endLayerDrag(){
+    if(!layerDrag) return;
+    const d=layerDrag; layerDrag=null;
+    clearDropMarks();
+    document.querySelectorAll('#layerList .layer-item').forEach(x=>x.classList.remove('dragging'));
+    document.body.style.cursor='';
+    if(d.active && d.targetId!=null && d.targetId!==d.id){ reorderLayer(d.id,d.targetId,d.below); }
+    // keep moved flag briefly so the trailing click on the handle's item doesn't re-select wrongly
+    if(d.moved){ layerDrag={moved:true}; setTimeout(()=>{ layerDrag=null; },0); }
+  }
+  window.addEventListener('pointermove',e=>{
+    if(!layerDrag || layerDrag.item===undefined) return;
+    if(!layerDrag.active){ if(Math.abs(e.clientY-layerDrag.startY)<4) return; layerDrag.active=true; layerDrag.moved=true; layerDrag.item.classList.add('dragging'); document.body.style.cursor='grabbing'; }
+    e.preventDefault();
+    updateLayerDropTarget(e.clientY);
+  });
+  window.addEventListener('pointerup',()=>{ if(layerDrag && layerDrag.item!==undefined) endLayerDrag(); });
+  window.addEventListener('pointercancel',()=>{ if(layerDrag && layerDrag.item!==undefined) endLayerDrag(); });
   function updateThumb(l){ if(l&&l._thumb){ const c=l._thumb.getContext('2d'); c.clearRect(0,0,40,32); c.drawImage(l.canvas,0,0,40,32); } }
   function syncLayerControls(){ const l=activeLayer(); if(!l)return; document.getElementById('layerOpacity').value=Math.round(l.opacity*100);
     document.getElementById('layerOpacityVal').textContent=Math.round(l.opacity*100)+'%'; document.getElementById('layerMode').value=l.mode; }
