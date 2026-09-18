@@ -1128,6 +1128,9 @@
   window.addEventListener('pointermove',pointerMove);
   window.addEventListener('pointerup',pointerUp);
   window.addEventListener('pointercancel',pointerUp);
+  // 描画エリアで右クリックメニューを出さない(描画の邪魔になるため)
+  stage.addEventListener('contextmenu',e=>e.preventDefault());
+  input.addEventListener('contextmenu',e=>e.preventDefault());
 
   window.addEventListener('keydown',e=>{ if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
     if(e.code==='Space'){ spaceDown=true; input.style.cursor='grab'; }
