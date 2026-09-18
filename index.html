@@ -111,7 +111,7 @@
   /* inner wrapper: centers the canvas when small, and (being at least 100%) lets the
      scroll container reach every edge when the canvas is zoomed larger than the stage.
      Centering directly on an overflow scroll container clips the top/left, which broke panning. */
-  .stage-inner { min-width: 100%; min-height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 24px; }
+  .stage-inner { min-width: 100%; min-height: 100%; width: max-content; height: max-content; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 24px; }
   :root[data-theme="dark"] .stage { background: repeating-conic-gradient(#2b3640 0% 25%, transparent 0% 50%) 0 0 / 20px 20px, var(--panel-2); }
   .canvas-wrap { position: relative; box-shadow: 0 6px 24px rgba(40,70,90,.28), 0 0 0 1px var(--line-strong); background: #fff; flex: none; }
   .canvas-wrap canvas { position: absolute; top: 0; left: 0; display: block; touch-action: none; }
@@ -442,6 +442,11 @@
   // recording of the drawing process
   let record = { v:1, w:CW, h:CH, layers:[], events:[] };
   let curStroke = null;
+  let recordedThisAction = false;   // このアクションで過程イベントを記録したか
+  // 過程イベントは履歴(undo/redo)と同期させる。undoで取り消した操作は再生から除外する。
+  function branchBase(){ return (histIndex>=0 && history[histIndex]) ? (history[histIndex].evLen||0) : record.events.length; }
+  function recordEvent(ev){ if(!recordedThisAction){ record.events.length = branchBase(); } record.events.push(ev); recordedThisAction=true; }
+  function currentEvents(){ const n = (histIndex>=0 && history[histIndex] && history[histIndex].evLen!=null) ? history[histIndex].evLen : record.events.length; return record.events.slice(0,n); }
 
   function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),1400); }
   function activeLayer(){ return layers.find(l=>l.id===activeId); }
@@ -534,7 +539,7 @@
     const dx=Math.round(moving.dx*2)/2, dy=Math.round(moving.dy*2)/2;
     if(l && (dx!==0 || dy!==0)){
       l.ctx.clearRect(0,0,CW,CH); l.ctx.drawImage(moving.snap,dx,dy); updateThumb(l);
-      record.events.push({t:'move',lid:l.id,dx,dy});
+      recordEvent({t:'move',lid:l.id,dx,dy});
       moving=null; redraw(); pushHistory();
     } else { moving=null; redraw(); }
   }
@@ -559,10 +564,13 @@
   }
   let navDragging=false;
   function navPanTo(clientX,clientY){ const r=navCanvas.getBoundingClientRect();
-    const ix=(clientX-r.left)/navScale, iy=(clientY-r.top)/navScale;
-    const sr=stage.getBoundingClientRect(), wr=wrap.getBoundingClientRect();
-    stage.scrollLeft += (wr.left+ix*zoom) - (sr.left+sr.width/2);
-    stage.scrollTop  += (wr.top +iy*zoom) - (sr.top +sr.height/2);
+    const ix=(clientX-r.left)/navScale, iy=(clientY-r.top)/navScale;      // カーソル下の画像座標
+    const vw=stage.clientWidth/zoom, vh=stage.clientHeight/zoom;           // 見えている画像範囲(画像px)
+    const left=Math.max(0, Math.min(Math.max(0,CW-vw), ix-vw/2));          // 表示範囲をキャンバス内にクランプ
+    const top =Math.max(0, Math.min(Math.max(0,CH-vh), iy-vh/2));
+    const PAD=24;   // .stage-inner の padding と一致
+    stage.scrollLeft = PAD + left*zoom;
+    stage.scrollTop  = PAD + top*zoom;
     scheduleNav();
   }
   navCanvas.addEventListener('pointerdown',e=>{ navDragging=true; navCanvas.setPointerCapture&&navCanvas.setPointerCapture(e.pointerId); navPanTo(e.clientX,e.clientY); });
@@ -579,7 +587,13 @@
   // ---------- history ----------
   function snapshot(){ return { activeId, layers: layers.map(l=>{ const c=document.createElement('canvas'); c.width=CW; c.height=CH; c.getContext('2d').drawImage(l.canvas,0,0);
     return {id:l.id,name:l.name,canvas:c,visible:l.visible,opacity:l.opacity,mode:l.mode,ref:l.ref}; }) }; }
-  function pushHistory(){ history.splice(histIndex+1); history.push(snapshot()); if(history.length>MAX_HISTORY)history.shift(); histIndex=history.length-1; updateUndoRedo(); }
+  function pushHistory(){
+    if(!recordedThisAction){ record.events.length = branchBase(); }  // 分岐時、取り消された未来のイベントを破棄
+    recordedThisAction=false;
+    history.splice(histIndex+1);
+    const snap=snapshot(); snap.evLen=record.events.length;
+    history.push(snap); if(history.length>MAX_HISTORY)history.shift(); histIndex=history.length-1; updateUndoRedo();
+  }
   function restore(s){ layers=s.layers.map(sl=>{ const c=document.createElement('canvas'); c.width=CW; c.height=CH; const ctx=c.getContext('2d'); ctx.drawImage(sl.canvas,0,0);
     return {id:sl.id,name:sl.name,canvas:c,ctx,visible:sl.visible,opacity:sl.opacity,mode:sl.mode,ref:!!sl.ref}; }); activeId=s.activeId;
     if(!activeLayer()&&layers.length)activeId=layers[layers.length-1].id; renderLayerList(); redraw(); syncLayerControls(); }
@@ -607,7 +621,7 @@
       const refIds=refs.map(x=>x.id);
       const matchCanvas = refs.length ? buildRefCanvas(refs,CW,CH) : l.canvas;
       bucketFill(matchCanvas, l.ctx, fx, fy, tool.color, tool.opacity, CW, CH);
-      record.events.push({t:'fill',lid:l.id,color:tool.color,op:tool.opacity,x:fx,y:fy,refIds:refIds});
+      recordEvent({t:'fill',lid:l.id,color:tool.color,op:tool.opacity,x:fx,y:fy,refIds:refIds});
       redraw(); updateThumb(l); } return; }
 
     const l=activeLayer(); if(!l||!l.visible){ toast(l?'レイヤーが非表示です':'レイヤーがありません'); return; }
@@ -653,7 +667,7 @@
     if(l){ l.ctx.save(); l.ctx.globalAlpha=tool.opacity; l.ctx.globalCompositeOperation=(tool.name==='eraser')?'destination-out':'source-over';
       l.ctx.drawImage(wet,0,0); l.ctx.restore(); updateThumb(l); }
     wctx.clearRect(0,0,CW,CH); redraw();
-    if(curStroke && curStroke.pts.length>=2){ record.events.push(curStroke); }
+    if(curStroke && curStroke.pts.length>=2){ recordEvent(curStroke); }
     curStroke=null;
     pushHistory();
   }
@@ -806,12 +820,13 @@
 
   function save(){
     const out=exportCanvas();
-    record.w=CW; record.h=CH;
-    record.layers=layers.map(l=>({id:l.id,name:l.name,opacity:l.opacity,mode:l.mode,visible:l.visible}));
+    const payload={ v:1, w:CW, h:CH,
+      layers: layers.map(l=>({id:l.id,name:l.name,opacity:l.opacity,mode:l.mode,visible:l.visible})),
+      events: currentEvents() };
     out.toBlob(blob=>{
       blob.arrayBuffer().then(buf=>{
         let bytes=new Uint8Array(buf);
-        try{ const json=JSON.stringify(record); bytes=insertTextChunk(bytes,'drawrTimelapse',json); }catch(err){ console.warn(err); }
+        try{ const json=JSON.stringify(payload); bytes=insertTextChunk(bytes,'drawrTimelapse',json); }catch(err){ console.warn(err); }
         const url=URL.createObjectURL(new Blob([bytes],{type:'image/png'}));
         const a=document.createElement('a'); a.href=url; a.download='drawr_'+Date.now()+'.png'; a.click();
         setTimeout(()=>URL.revokeObjectURL(url),2000);
@@ -981,10 +996,12 @@
 
   // replay current in-editor drawing
   function replayCurrent(){
-    record.w=CW; record.h=CH;
-    record.layers=layers.map(l=>({id:l.id,name:l.name,opacity:l.opacity,mode:l.mode,visible:l.visible}));
-    if(!record.events.length){ toast('まだ描いていません'); return; }
-    openPlayer(JSON.parse(JSON.stringify(record)));
+    const evs=currentEvents();
+    if(!evs.length){ toast('まだ描いていません'); return; }
+    const payload={ v:1, w:CW, h:CH,
+      layers: layers.map(l=>({id:l.id,name:l.name,opacity:l.opacity,mode:l.mode,visible:l.visible})),
+      events: evs };
+    openPlayer(JSON.parse(JSON.stringify(payload)));
   }
 
   // ---------- resize ----------
@@ -1037,7 +1054,7 @@
   document.getElementById('dupLayer').addEventListener('click',()=>{ const l=activeLayer(); if(!l)return; const nl=makeLayer(l.name+' コピー'); nl.ctx.drawImage(l.canvas,0,0); nl.opacity=l.opacity; nl.mode=l.mode; nl.ref=l.ref;
     const idx=layers.findIndex(x=>x.id===activeId); layers.splice(idx+1,0,nl); activeId=nl.id; renderLayerList(); redraw(); pushHistory(); toast('複製しました'); });
   document.getElementById('delLayer').addEventListener('click',()=>{
-    if(layers.length<=1){ const l=activeLayer(); if(l){ l.ctx.clearRect(0,0,CW,CH); record.events.push({t:'clear',lid:l.id}); updateThumb(l); redraw(); pushHistory(); toast('画面をクリアしました'); } return; }
+    if(layers.length<=1){ const l=activeLayer(); if(l){ l.ctx.clearRect(0,0,CW,CH); recordEvent({t:'clear',lid:l.id}); updateThumb(l); redraw(); pushHistory(); toast('画面をクリアしました'); } return; }
     const idx=layers.findIndex(x=>x.id===activeId); layers.splice(idx,1); activeId=(layers[idx]||layers[idx-1]||layers[0]).id; renderLayerList(); redraw(); pushHistory(); toast('レイヤーを削除'); });
   document.getElementById('mergeLayer').addEventListener('click',()=>{ const idx=layers.findIndex(x=>x.id===activeId); if(idx<=0){ toast('下にレイヤーがありません'); return; }
     const upper=layers[idx],lower=layers[idx-1]; lower.ctx.save(); lower.ctx.globalAlpha=upper.opacity; lower.ctx.globalCompositeOperation=upper.mode; lower.ctx.drawImage(upper.canvas,0,0); lower.ctx.restore();
@@ -1055,7 +1072,7 @@
   document.getElementById('openBtn').addEventListener('click',()=>document.getElementById('fileInput').click());
   document.getElementById('fileInput').addEventListener('change',e=>{ const f=e.target.files[0]; if(f)openFile(f); e.target.value=''; });
   document.getElementById('clearBtn').addEventListener('click',()=>{ const l=activeLayer(); if(!l)return; l.ctx.clearRect(0,0,CW,CH);
-    record.events.push({t:'clear',lid:l.id}); updateThumb(l); redraw(); pushHistory(); toast('レイヤーをクリア'); });
+    recordEvent({t:'clear',lid:l.id}); updateThumb(l); redraw(); pushHistory(); toast('レイヤーをクリア'); });
   document.getElementById('bgBtn').addEventListener('click',()=>{ const l=activeLayer(); if(!l)return; l.ctx.save(); l.ctx.globalCompositeOperation='destination-over'; l.ctx.fillStyle='#ffffff'; l.ctx.fillRect(0,0,CW,CH); l.ctx.restore();
     updateThumb(l); redraw(); pushHistory(); toast('背景を白紙にしました'); });
   document.getElementById('replayBtn').addEventListener('click',replayCurrent);
@@ -1078,7 +1095,18 @@
   document.getElementById('zoomIn').addEventListener('click',()=>{ zoom=Math.min(8,zoom*1.25); applyZoom(); });
   document.getElementById('zoomOut').addEventListener('click',()=>{ zoom=Math.max(0.1,zoom/1.25); applyZoom(); });
   document.getElementById('zoomFit').addEventListener('click',fitZoom);
-  stage.addEventListener('wheel',e=>{ if(e.ctrlKey){ e.preventDefault(); zoom=Math.max(0.1,Math.min(8,zoom*(e.deltaY<0?1.1:0.9))); applyZoom(); } },{passive:false});
+  stage.addEventListener('wheel',e=>{
+    e.preventDefault();
+    const wrB=wrap.getBoundingClientRect();
+    const ix=(e.clientX-wrB.left)/zoom, iy=(e.clientY-wrB.top)/zoom;   // カーソル下の画像座標
+    const nz=Math.max(0.1,Math.min(8, zoom*(e.deltaY<0?1.1:0.9)));
+    if(nz===zoom) return;
+    zoom=nz; applyZoom();
+    const wrA=wrap.getBoundingClientRect();                            // ズーム後の位置でカーソル下の点を合わせ直す
+    stage.scrollLeft += (wrA.left+ix*zoom) - e.clientX;
+    stage.scrollTop  += (wrA.top +iy*zoom) - e.clientY;
+    scheduleNav();
+  },{passive:false});
 
   document.getElementById('themeBtn').addEventListener('click',()=>{ const dark=document.documentElement.getAttribute('data-theme')==='dark';
     document.documentElement.setAttribute('data-theme',dark?'light':'dark'); document.getElementById('themeBtn').innerHTML=dark?'&#127769;':'&#9728;';
