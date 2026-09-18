@@ -99,21 +99,38 @@
   .shape-btn.active { background: var(--accent); border-color: var(--accent-deep); color: #fff; }
   .shape-btn.active span { color: rgba(255,255,255,.85); }
 
+  .toggle-btn { width: 100%; height: 32px; border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink);
+    border-radius: 7px; font-size: 12px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .toggle-btn::before { content: ""; width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--line-strong); background: var(--panel-2); flex: none; }
+  .toggle-btn:hover { background: var(--accent-soft); border-color: var(--accent); }
+  .toggle-btn.on { background: var(--accent); color: #fff; border-color: var(--accent-deep); }
+  .toggle-btn.on::before { background: #fff; border-color: #fff; content: "\2713"; color: var(--accent-deep); font-size: 11px; display: flex; align-items: center; justify-content: center; line-height: 1; }
+
   .stage { flex: 1; min-width: 0; position: relative; overflow: hidden;
-    background: repeating-conic-gradient(var(--line) 0% 25%, transparent 0% 50%) 0 0 / 20px 20px, var(--panel-2);
-    display: flex; align-items: center; justify-content: center; }
+    background: repeating-conic-gradient(var(--line) 0% 25%, transparent 0% 50%) 0 0 / 20px 20px, var(--panel-2); }
+  /* inner wrapper: centers the canvas when small, and (being at least 100%) lets the
+     scroll container reach every edge when the canvas is zoomed larger than the stage.
+     Centering directly on an overflow scroll container clips the top/left, which broke panning. */
+  .stage-inner { min-width: 100%; min-height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 24px; }
   :root[data-theme="dark"] .stage { background: repeating-conic-gradient(#2b3640 0% 25%, transparent 0% 50%) 0 0 / 20px 20px, var(--panel-2); }
-  .canvas-wrap { position: relative; box-shadow: 0 6px 24px rgba(40,70,90,.28), 0 0 0 1px var(--line-strong); background: #fff; }
+  .canvas-wrap { position: relative; box-shadow: 0 6px 24px rgba(40,70,90,.28), 0 0 0 1px var(--line-strong); background: #fff; flex: none; }
   .canvas-wrap canvas { position: absolute; top: 0; left: 0; display: block; touch-action: none; }
   #cursorLayer { pointer-events: none; }
 
-  .zoom-bar { position: absolute; left: 12px; bottom: 12px; display: flex; align-items: center; gap: 4px;
-    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px; box-shadow: var(--shadow); z-index: 10; }
-  .zoom-bar button { width: 28px; height: 28px; border: none; background: transparent; color: var(--ink); font-size: 16px; font-weight: 800; cursor: pointer; border-radius: 6px; }
-  .zoom-bar button:hover { background: var(--accent-soft); }
-  .zoom-bar .z-val { font-size: 12px; font-weight: 800; min-width: 44px; text-align: center; color: var(--ink-soft); }
+  .nav-zoom { display: flex; align-items: center; justify-content: center; gap: 4px; }
+  .nav-zoom button { height: 28px; min-width: 30px; border: 1px solid var(--line-strong); background: var(--panel-2); color: var(--ink);
+    font-size: 15px; font-weight: 800; cursor: pointer; border-radius: 6px; padding: 0 8px; }
+  .nav-zoom button:hover { background: var(--accent-soft); border-color: var(--accent); }
+  .nav-zoom button:active { transform: translateY(1px); }
+  .nav-zoom button#zoomFit { font-size: 12px; }
+  .nav-zoom .z-val { font-size: 12px; font-weight: 800; min-width: 46px; text-align: center; color: var(--ink-soft); }
 
   .layers { width: 226px; flex: none; background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; }
+  .nav-panel { padding: 12px 14px 10px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+  .nav-wrap { display: flex; align-items: center; justify-content: center; min-height: 60px;
+    background: repeating-conic-gradient(var(--line) 0% 25%, transparent 0% 50%) 0 0 / 12px 12px, var(--panel-2);
+    border: 1px solid var(--line-strong); border-radius: 8px; padding: 6px; }
+  #navCanvas { display: block; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.18); background: #fff; }
   .layers-head { padding: 12px 14px 8px; display: flex; align-items: center; justify-content: space-between; }
   .layers-head .opt-title { margin: 0; }
   .layer-tools { display: flex; gap: 4px; padding: 0 10px 8px; flex-wrap: wrap; }
@@ -142,6 +159,13 @@
   .layer-name { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .layer-name input { width: 100%; border: 1px solid var(--accent); border-radius: 4px; font-size: 12.5px; font-weight: 700; padding: 2px 4px; background: var(--panel); color: var(--ink); }
   .drag-handle { color: var(--ink-soft); cursor: grab; flex: none; display: flex; }
+  .layer-ref { width: 20px; height: 20px; flex: none; border-radius: 5px; border: 1.5px solid var(--line-strong); background: var(--panel);
+    cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 900; color: transparent; }
+  .layer-ref:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .layer-ref.on { background: var(--accent); border-color: var(--accent-deep); color: #fff; }
+  .layer-ref.on::after { content: "\2713"; }
+  .layer-hint { font-size: 10.5px; line-height: 1.4; color: var(--ink-soft); padding: 0 12px 8px; }
+  .layer-hint b { color: var(--accent-deep); }
   .drag-handle svg { width: 14px; height: 14px; }
 
   .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--ink); color: #fff;
@@ -283,6 +307,7 @@
         <div class="field-row"><label>筆の角度</label><span class="val" id="angleVal">45&deg;</span></div>
         <input type="range" id="angleRange" min="0" max="180" value="45">
       </div>
+      <button class="toggle-btn" id="binaryToggle" title="縁のアンチエイリアスを無くし、くっきりした線にします">2値ペン (アンチエイリアスなし)</button>
     </div>
     <div class="field">
       <div class="field-row"><label>ふとうめい度</label><span class="val" id="opacityVal">100%</span></div>
@@ -301,20 +326,26 @@
   </div>
 
   <div class="stage" id="stage">
-    <div class="canvas-wrap" id="canvasWrap">
-      <canvas id="composite"></canvas>
-      <canvas id="inputCanvas"></canvas>
-      <canvas id="cursorLayer"></canvas>
-    </div>
-    <div class="zoom-bar">
-      <button id="zoomOut">&minus;</button>
-      <span class="z-val" id="zoomVal">100%</span>
-      <button id="zoomIn">+</button>
-      <button id="zoomFit" title="フィット" style="font-size:12px;">&#9969;</button>
+    <div class="stage-inner" id="stageInner">
+      <div class="canvas-wrap" id="canvasWrap">
+        <canvas id="composite"></canvas>
+        <canvas id="inputCanvas"></canvas>
+        <canvas id="cursorLayer"></canvas>
+      </div>
     </div>
   </div>
 
   <div class="layers" id="layers">
+    <div class="nav-panel">
+      <div class="opt-title">プレビュー</div>
+      <div class="nav-wrap"><canvas id="navCanvas" title="クリック/ドラッグで表示位置を移動"></canvas></div>
+      <div class="nav-zoom">
+        <button id="zoomOut" title="縮小">&minus;</button>
+        <span class="z-val" id="zoomVal">100%</span>
+        <button id="zoomIn" title="拡大">+</button>
+        <button id="zoomFit" title="全体表示">全体</button>
+      </div>
+    </div>
     <div class="layers-head"><div class="opt-title">レイヤー</div></div>
     <div class="layer-tools">
       <button class="lt-btn" id="addLayer" title="新規レイヤー"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></button>
@@ -335,6 +366,7 @@
         <option value="saturation">彩度</option><option value="color">カラー</option><option value="luminosity">輝度</option>
       </select>
     </div>
+    <div class="layer-hint">各レイヤーの右の <b>&#10003;</b> を入れると、そのレイヤーの線を<b>塗りつぶしの境界</b>として参照します（色は今のレイヤーに塗られます）。</div>
     <div class="layer-list" id="layerList"></div>
   </div>
 </main>
@@ -389,10 +421,23 @@
   // the composited result (at tool opacity). The DOM #inputCanvas captures pointer
   // events only and is never drawn on.
   const wet = document.createElement('canvas'); let wctx;
+  const navCanvas = document.getElementById('navCanvas'); const nctx = navCanvas.getContext('2d'); let navScale = 1;
 
   let layers = [], activeId = null, layerSeq = 0;
   const history = []; let histIndex = -1;
-  const tool = { name:'pen', color:'#3a4a54', size:8, opacity:1, smooth:3, shape:'round', angle:45 };
+  const tool = { name:'pen', color:'#3a4a54', size:8, opacity:1, smooth:3, shape:'round', angle:45, binary:false };
+
+  // 2値化: 指定領域のアルファを閾値でオン/オフに(アンチエイリアスの縁を消す)
+  const BIN_TOOLS=['pen','pencil','marker','eraser'];
+  function thresholdRegion(ctx, x, y, w, h, thr){
+    x=Math.max(0,Math.floor(x)); y=Math.max(0,Math.floor(y));
+    w=Math.min(CW-x,Math.ceil(w)); h=Math.min(CH-y,Math.ceil(h));
+    if(w<=0||h<=0)return;
+    const img=ctx.getImageData(x,y,w,h), d=img.data, t=thr||128;
+    for(let i=3;i<d.length;i+=4){ d[i]=d[i]>=t?255:0; }
+    ctx.putImageData(img,x,y);
+  }
+  function segBBox(a,b,size){ const pad=size/2+2; return { x:Math.min(a.x,b.x)-pad, y:Math.min(a.y,b.y)-pad, w:Math.abs(a.x-b.x)+pad*2, h:Math.abs(a.y-b.y)+pad*2 }; }
 
   // recording of the drawing process
   let record = { v:1, w:CW, h:CH, layers:[], events:[] };
@@ -443,13 +488,13 @@
 
   // ---------- layers ----------
   function makeLayer(name){ const c=document.createElement('canvas'); c.width=CW; c.height=CH;
-    return { id:++layerSeq, name:name||('レイヤー '+layerSeq), canvas:c, ctx:c.getContext('2d'), visible:true, opacity:1, mode:'source-over' }; }
+    return { id:++layerSeq, name:name||('レイヤー '+layerSeq), canvas:c, ctx:c.getContext('2d'), visible:true, opacity:1, mode:'source-over', ref:false }; }
   function addLayer(opts){ const l=makeLayer(opts&&opts.name); const idx=layers.findIndex(x=>x.id===activeId);
     if(idx===-1)layers.push(l); else layers.splice(idx+1,0,l); activeId=l.id; renderLayerList(); redraw(); return l; }
 
   function redraw(){ cctx.clearRect(0,0,CW,CH);
     for(const l of layers){ if(!l.visible||l.opacity<=0)continue; cctx.globalAlpha=l.opacity; cctx.globalCompositeOperation=l.mode; cctx.drawImage(l.canvas,0,0); }
-    cctx.globalAlpha=1; cctx.globalCompositeOperation='source-over'; }
+    cctx.globalAlpha=1; cctx.globalCompositeOperation='source-over'; scheduleNav(); }
 
   // live preview: composite with the wet stroke folded into the active layer at tool opacity + layer mode
   function previewComposite(){
@@ -470,7 +515,7 @@
         cctx.drawImage(l.canvas,0,0);
       }
     }
-    cctx.globalAlpha=1; cctx.globalCompositeOperation='source-over';
+    cctx.globalAlpha=1; cctx.globalCompositeOperation='source-over'; scheduleNav();
   }
 
   // preview while dragging the active layer's pixels with the move tool
@@ -482,7 +527,7 @@
       if(moving && l.id===moving.lid){ cctx.drawImage(moving.snap, moving.dx, moving.dy); }
       else cctx.drawImage(l.canvas,0,0);
     }
-    cctx.globalAlpha=1; cctx.globalCompositeOperation='source-over';
+    cctx.globalAlpha=1; cctx.globalCompositeOperation='source-over'; scheduleNav();
   }
   function commitMove(){
     const l=layers.find(x=>x.id===moving.lid);
@@ -493,17 +538,50 @@
       moving=null; redraw(); pushHistory();
     } else { moving=null; redraw(); }
   }
+  // ---------- navigator / preview ----------
+  function layoutNav(){ const NAVW=196, NAVH=170; navScale=Math.min(NAVW/CW, NAVH/CH);
+    const w=Math.max(1,Math.round(CW*navScale)), h=Math.max(1,Math.round(CH*navScale));
+    navCanvas.width=w; navCanvas.height=h; navCanvas.style.width=w+'px'; navCanvas.style.height=h+'px'; }
+  let navPending=false;
+  function scheduleNav(){ if(navPending)return; navPending=true; requestAnimationFrame(()=>{ navPending=false; updatePreview(); }); }
+  function updatePreview(){ const w=navCanvas.width, h=navCanvas.height; if(!w||!h)return;
+    nctx.clearRect(0,0,w,h); nctx.fillStyle='#ffffff'; nctx.fillRect(0,0,w,h);
+    nctx.drawImage(composite,0,0,w,h);
+    // viewport rectangle: visible image region, computed from actual rendered positions
+    const sr=stage.getBoundingClientRect(), wr=wrap.getBoundingClientRect();
+    const vx=(sr.left-wr.left)/zoom, vy=(sr.top-wr.top)/zoom, vw=sr.width/zoom, vh=sr.height/zoom;
+    const x0=Math.max(0,vx), y0=Math.max(0,vy), x1=Math.min(CW,vx+vw), y1=Math.min(CH,vy+vh);
+    if(x1>x0 && y1>y0 && (x0>0.5||y0>0.5||x1<CW-0.5||y1<CH-0.5)){
+      const rx=x0*navScale, ry=y0*navScale, rw=(x1-x0)*navScale, rh=(y1-y0)*navScale;
+      nctx.strokeStyle='rgba(0,0,0,.6)'; nctx.lineWidth=2; nctx.strokeRect(rx,ry,rw,rh);
+      nctx.strokeStyle='rgba(255,255,255,.95)'; nctx.lineWidth=1; nctx.strokeRect(rx,ry,rw,rh);
+    }
+  }
+  let navDragging=false;
+  function navPanTo(clientX,clientY){ const r=navCanvas.getBoundingClientRect();
+    const ix=(clientX-r.left)/navScale, iy=(clientY-r.top)/navScale;
+    const sr=stage.getBoundingClientRect(), wr=wrap.getBoundingClientRect();
+    stage.scrollLeft += (wr.left+ix*zoom) - (sr.left+sr.width/2);
+    stage.scrollTop  += (wr.top +iy*zoom) - (sr.top +sr.height/2);
+    scheduleNav();
+  }
+  navCanvas.addEventListener('pointerdown',e=>{ navDragging=true; navCanvas.setPointerCapture&&navCanvas.setPointerCapture(e.pointerId); navPanTo(e.clientX,e.clientY); });
+  navCanvas.addEventListener('pointermove',e=>{ if(navDragging)navPanTo(e.clientX,e.clientY); });
+  navCanvas.addEventListener('pointerup',()=>{ navDragging=false; });
+  navCanvas.addEventListener('pointercancel',()=>{ navDragging=false; });
+  window.addEventListener('resize',scheduleNav);
+
   function applyZoom(){ const w=Math.round(CW*zoom),h=Math.round(CH*zoom); wrap.style.width=w+'px'; wrap.style.height=h+'px';
-    [composite,input,cursorLayer].forEach(cv=>{cv.style.width=w+'px'; cv.style.height=h+'px';}); document.getElementById('zoomVal').textContent=Math.round(zoom*100)+'%'; }
-  function setCanvasSize(){ [composite,input,cursorLayer].forEach(cv=>{cv.width=CW; cv.height=CH;}); tmp.width=CW; tmp.height=CH; tctx=tmp.getContext('2d'); wet.width=CW; wet.height=CH; wctx=wet.getContext('2d'); applyZoom(); }
+    [composite,input,cursorLayer].forEach(cv=>{cv.style.width=w+'px'; cv.style.height=h+'px';}); document.getElementById('zoomVal').textContent=Math.round(zoom*100)+'%'; scheduleNav(); }
+  function setCanvasSize(){ [composite,input,cursorLayer].forEach(cv=>{cv.width=CW; cv.height=CH;}); tmp.width=CW; tmp.height=CH; tctx=tmp.getContext('2d'); wet.width=CW; wet.height=CH; wctx=wet.getContext('2d'); layoutNav(); applyZoom(); }
   function fitZoom(){ const pad=48; zoom=Math.max(0.1,Math.min((stage.clientWidth-pad)/CW,(stage.clientHeight-pad)/CH,1)); applyZoom(); }
 
   // ---------- history ----------
   function snapshot(){ return { activeId, layers: layers.map(l=>{ const c=document.createElement('canvas'); c.width=CW; c.height=CH; c.getContext('2d').drawImage(l.canvas,0,0);
-    return {id:l.id,name:l.name,canvas:c,visible:l.visible,opacity:l.opacity,mode:l.mode}; }) }; }
+    return {id:l.id,name:l.name,canvas:c,visible:l.visible,opacity:l.opacity,mode:l.mode,ref:l.ref}; }) }; }
   function pushHistory(){ history.splice(histIndex+1); history.push(snapshot()); if(history.length>MAX_HISTORY)history.shift(); histIndex=history.length-1; updateUndoRedo(); }
   function restore(s){ layers=s.layers.map(sl=>{ const c=document.createElement('canvas'); c.width=CW; c.height=CH; const ctx=c.getContext('2d'); ctx.drawImage(sl.canvas,0,0);
-    return {id:sl.id,name:sl.name,canvas:c,ctx,visible:sl.visible,opacity:sl.opacity,mode:sl.mode}; }); activeId=s.activeId;
+    return {id:sl.id,name:sl.name,canvas:c,ctx,visible:sl.visible,opacity:sl.opacity,mode:sl.mode,ref:!!sl.ref}; }); activeId=s.activeId;
     if(!activeLayer()&&layers.length)activeId=layers[layers.length-1].id; renderLayerList(); redraw(); syncLayerControls(); }
   function undo(){ if(histIndex>0){ histIndex--; restore(history[histIndex]); updateUndoRedo(); toast('元に戻す'); } }
   function redo(){ if(histIndex<history.length-1){ histIndex++; restore(history[histIndex]); updateUndoRedo(); toast('やり直し'); } }
@@ -523,24 +601,32 @@
       moving={lid:l.id, snap, sx:p.x, sy:p.y, dx:0, dy:0};
       input.setPointerCapture&&input.setPointerCapture(e.pointerId); return; }
     if(tool.name==='eyedropper'){ pickColor(p); return; }
-    if(tool.name==='fill'){ const l=activeLayer(); if(l){ pushHistory(); floodFill(l.ctx,Math.floor(p.x),Math.floor(p.y),tool.color,tool.opacity);
-      record.events.push({t:'fill',lid:l.id,color:tool.color,op:tool.opacity,x:Math.floor(p.x),y:Math.floor(p.y)}); redraw(); updateThumb(l); } return; }
+    if(tool.name==='fill'){ const l=activeLayer(); if(l){ pushHistory();
+      const fx=Math.floor(p.x), fy=Math.floor(p.y);
+      const refs=layers.filter(x=>x.ref && x.visible);
+      const refIds=refs.map(x=>x.id);
+      const matchCanvas = refs.length ? buildRefCanvas(refs,CW,CH) : l.canvas;
+      bucketFill(matchCanvas, l.ctx, fx, fy, tool.color, tool.opacity, CW, CH);
+      record.events.push({t:'fill',lid:l.id,color:tool.color,op:tool.opacity,x:fx,y:fy,refIds:refIds});
+      redraw(); updateThumb(l); } return; }
 
     const l=activeLayer(); if(!l||!l.visible){ toast(l?'レイヤーが非表示です':'レイヤーがありません'); return; }
     drawing=true; input.setPointerCapture&&input.setPointerCapture(e.pointerId);
     lastP=p; smoothP={x:p.x,y:p.y}; wctx.clearRect(0,0,CW,CH);
     airSeed=(Math.random()*100000)|0;
+    const binOn = tool.binary && BIN_TOOLS.includes(tool.name);
     curStroke={ t:'st', lid:l.id, tool:tool.name, color:tool.color, size:tool.size, op:tool.opacity, seed:airSeed,
-      shape:tool.shape, angle:tool.angle, pts:[Math.round(p.x*2)/2,Math.round(p.y*2)/2] };
+      shape:tool.shape, angle:tool.angle, binary:binOn, pts:[Math.round(p.x*2)/2,Math.round(p.y*2)/2] };
 
     if(tool.name==='airbrush'){ airPos=p; airStampInto(wctx,tool.color,tool.size,p,airSeed); airSeed++; 
       airTimer=setInterval(()=>{ if(airPos){ airStampInto(wctx,tool.color,tool.size,airPos,airSeed++); previewComposite(); } },45);
-    } else { wctx.strokeStyle=tool.color; wctx.fillStyle=tool.color; wetSeg(wctx,tool.name,tool.color,tool.size,p,{x:p.x+0.01,y:p.y},tool.shape,tool.angle); }
+    } else { wctx.strokeStyle=tool.color; wctx.fillStyle=tool.color; wetSeg(wctx,tool.name,tool.color,tool.size,p,{x:p.x+0.01,y:p.y},tool.shape,tool.angle);
+      if(binOn){ const bb=segBBox(p,p,tool.size); thresholdRegion(wctx,bb.x,bb.y,bb.w,bb.h); } }
     previewComposite();
   }
 
   function pointerMove(e){
-    if(panning){ stage.scrollLeft=scrollStart.x-(e.clientX-panStart.x); stage.scrollTop=scrollStart.y-(e.clientY-panStart.y); return; }
+    if(panning){ stage.scrollLeft=scrollStart.x-(e.clientX-panStart.x); stage.scrollTop=scrollStart.y-(e.clientY-panStart.y); scheduleNav(); return; }
     if(moving){ const q=getPos(e); moving.dx=q.x-moving.sx; moving.dy=q.y-moving.sy; previewMove(); return; }
     const p=getPos(e); drawCursor(p);
     if(!drawing)return;
@@ -553,6 +639,7 @@
     if(dist<1.2) return;
     wctx.strokeStyle=tool.color; wctx.fillStyle=tool.color;
     wetSeg(wctx,tool.name,tool.color,tool.size,lastP,np,tool.shape,tool.angle);
+    if(curStroke.binary){ const bb=segBBox(lastP,np,tool.size); thresholdRegion(wctx,bb.x,bb.y,bb.w,bb.h); }
     lastP=np; curStroke.pts.push(Math.round(np.x*2)/2,Math.round(np.y*2)/2);
     previewComposite();
   }
@@ -594,23 +681,33 @@
     if(d[3]===0){ toast('透明です'); return; }
     const hex='#'+[d[0],d[1],d[2]].map(v=>v.toString(16).padStart(2,'0')).join(''); setColor(hex); toast('色を取得: '+hex.toUpperCase()); }
 
-  function floodFill(ctx,x,y,colorHex,opacity){
-    if(x<0||y<0||x>=CW||y>=CH)return;
-    const img=ctx.getImageData(0,0,CW,CH), data=img.data, idx=(y*CW+x)*4;
-    const target=[data[idx],data[idx+1],data[idx+2],data[idx+3]];
+  // bucket fill. matchCanvas = 境界判定に使う画像(参照), destCtx = 実際に塗る先.
+  // 参照レイヤーが無いときは matchCanvas===描画先レイヤー を渡せば従来どおり。
+  function bucketFill(matchCanvas, destCtx, sx, sy, colorHex, opacity, w, h){
+    if(sx<0||sy<0||sx>=w||sy>=h)return;
+    const mdata=matchCanvas.getContext('2d').getImageData(0,0,w,h).data;
+    const dimg=destCtx.getImageData(0,0,w,h), ddata=dimg.data;
+    const t=(sy*w+sx)*4, tr=mdata[t],tg=mdata[t+1],tb=mdata[t+2],ta=mdata[t+3];
     const [fr,fg,fb]=hexToRgb(colorHex), fa=Math.round(opacity*255);
-    if(target[0]===fr&&target[1]===fg&&target[2]===fb&&target[3]===fa)return;
     const tol=32;
-    const match=i=>Math.abs(data[i]-target[0])<=tol&&Math.abs(data[i+1]-target[1])<=tol&&Math.abs(data[i+2]-target[2])<=tol&&Math.abs(data[i+3]-target[3])<=tol;
-    const stack=[[x,y]];
-    while(stack.length){ const [cx,cy]=stack.pop(); let ny=cy,i=(ny*CW+cx)*4;
-      while(ny>=0&&match(i)){ny--;i-=CW*4;} ny++;i+=CW*4; let spanL=false,spanR=false;
-      while(ny<CH&&match(i)){ data[i]=fr;data[i+1]=fg;data[i+2]=fb;data[i+3]=fa;
-        if(cx>0){ if(match(i-4)&&!spanL){stack.push([cx-1,ny]);spanL=true;} else if(!match(i-4))spanL=false; }
-        if(cx<CW-1){ if(match(i+4)&&!spanR){stack.push([cx+1,ny]);spanR=true;} else if(!match(i+4))spanR=false; }
-        ny++;i+=CW*4; } }
-    ctx.putImageData(img,0,0);
+    const matches=p=>{ const i=p*4; return Math.abs(mdata[i]-tr)<=tol&&Math.abs(mdata[i+1]-tg)<=tol&&Math.abs(mdata[i+2]-tb)<=tol&&Math.abs(mdata[i+3]-ta)<=tol; };
+    const visited=new Uint8Array(w*h);
+    const stack=[[sx,sy]];
+    while(stack.length){ let [cx,cy]=stack.pop(); let p=cy*w+cx;
+      while(cy>=0 && !visited[p] && matches(p)){ cy--; p-=w; }
+      cy++; p+=w; let spanL=false,spanR=false;
+      while(cy<h && !visited[p] && matches(p)){
+        visited[p]=1; const di=p*4; ddata[di]=fr;ddata[di+1]=fg;ddata[di+2]=fb;ddata[di+3]=fa;
+        if(cx>0){ const lp=p-1; if(!visited[lp]&&matches(lp)){ if(!spanL){stack.push([cx-1,cy]);spanL=true;} } else spanL=false; }
+        if(cx<w-1){ const rp=p+1; if(!visited[rp]&&matches(rp)){ if(!spanR){stack.push([cx+1,cy]);spanR=true;} } else spanR=false; }
+        cy++; p+=w;
+      }
+    }
+    destCtx.putImageData(dimg,0,0);
   }
+  // 参照レイヤー(ref=true かつ表示中)を1枚に合成した境界判定用キャンバスを作る
+  function buildRefCanvas(layerList, w, h){ const c=document.createElement('canvas'); c.width=w; c.height=h; const cx=c.getContext('2d');
+    for(const l of layerList) cx.drawImage(l.canvas,0,0); return c; }
 
   // ---------- layer list ----------
   function renderLayerList(){
@@ -627,7 +724,9 @@
       const name=document.createElement('div'); name.className='layer-name'; name.textContent=l.name;
       name.addEventListener('dblclick',ev=>{ ev.stopPropagation(); const inp=document.createElement('input'); inp.value=l.name; name.textContent=''; name.appendChild(inp); inp.focus(); inp.select();
         const done=()=>{ l.name=inp.value.trim()||l.name; renderLayerList(); }; inp.addEventListener('blur',done); inp.addEventListener('keydown',k=>{if(k.key==='Enter')inp.blur();}); });
-      item.appendChild(handle); item.appendChild(vis); item.appendChild(thumbBox); item.appendChild(name);
+      const ref=document.createElement('div'); ref.className='layer-ref'+(l.ref?' on':''); ref.title='塗りつぶしの参照にする（この線を境界として使う）';
+      ref.addEventListener('click',ev=>{ ev.stopPropagation(); l.ref=!l.ref; renderLayerList(); });
+      item.appendChild(handle); item.appendChild(vis); item.appendChild(thumbBox); item.appendChild(name); item.appendChild(ref);
       item.addEventListener('click',()=>{ activeId=l.id; renderLayerList(); syncLayerControls(); });
       item.addEventListener('dragstart',ev=>{ item.classList.add('dragging'); ev.dataTransfer.setData('text/plain',l.id); });
       item.addEventListener('dragend',()=>{ item.classList.remove('dragging'); document.querySelectorAll('.layer-item').forEach(x=>x.classList.remove('drop-target')); });
@@ -784,7 +883,11 @@
 
   function stepForward(){
     const atom=play.atoms[play.idx]; if(!atom)return; const ev=atom.ev;
-    if(ev.t==='fill'){ endActiveStroke(); const l=playLayer(ev.lid); if(l)floodFill(l.ctx,ev.x,ev.y,ev.color,ev.op); }
+    if(ev.t==='fill'){ endActiveStroke(); const l=playLayer(ev.lid); if(l){
+        let match=l.canvas;
+        if(ev.refIds&&ev.refIds.length){ const refs=ev.refIds.map(id=>playLayer(id)).filter(Boolean); if(refs.length) match=buildRefCanvas(refs,play.pw,play.ph); }
+        bucketFill(match,l.ctx,ev.x,ev.y,ev.color,ev.op,play.pw,play.ph);
+      } }
     else if(ev.t==='clear'){ endActiveStroke(); const l=playLayer(ev.lid); if(l)l.ctx.clearRect(0,0,play.pw,play.ph); }
     else if(ev.t==='move'){ endActiveStroke(); const l=playLayer(ev.lid); if(l){ const t=document.createElement('canvas'); t.width=play.pw; t.height=play.ph; t.getContext('2d').drawImage(l.canvas,0,0); l.ctx.clearRect(0,0,play.pw,play.ph); l.ctx.drawImage(t,ev.dx,ev.dy); } }
     else if(ev.t==='st'){
@@ -793,12 +896,14 @@
         const p={x:ev.pts[0],y:ev.pts[1]};
         play.stctx.strokeStyle=ev.color; play.stctx.fillStyle=ev.color;
         if(ev.tool==='airbrush') airStampInto(play.stctx,ev.color,ev.size,p,(ev.seed||1));
-        else wetSeg(play.stctx,ev.tool,ev.color,ev.size,p,{x:p.x+0.01,y:p.y},ev.shape,ev.angle);
+        else { wetSeg(play.stctx,ev.tool,ev.color,ev.size,p,{x:p.x+0.01,y:p.y},ev.shape,ev.angle);
+          if(ev.binary){ const bb=segBBox(p,p,ev.size); thresholdRegion(play.stctx,bb.x,bb.y,bb.w,bb.h); } }
       } else {
         const a={x:ev.pts[(atom.k-1)*2],y:ev.pts[(atom.k-1)*2+1]}, b={x:ev.pts[atom.k*2],y:ev.pts[atom.k*2+1]};
         play.stctx.strokeStyle=ev.color; play.stctx.fillStyle=ev.color;
         if(ev.tool==='airbrush') airStampInto(play.stctx,ev.color,ev.size,b,(ev.seed||1)+atom.k);
-        else wetSeg(play.stctx,ev.tool,ev.color,ev.size,a,b,ev.shape,ev.angle);
+        else { wetSeg(play.stctx,ev.tool,ev.color,ev.size,a,b,ev.shape,ev.angle);
+          if(ev.binary){ const bb=segBBox(a,b,ev.size); thresholdRegion(play.stctx,bb.x,bb.y,bb.w,bb.h); } }
       }
       // if last point of stroke, flatten
       if(atom.k===ev.pts.length/2-1){ endActiveStroke(); }
@@ -856,13 +961,14 @@
     const strokeTmp=document.createElement('canvas'); strokeTmp.width=CW; strokeTmp.height=CH; const stc=strokeTmp.getContext('2d');
     rec.events.forEach(ev=>{
       const l=layers.find(x=>x.id===ev.lid); if(!l)return;
-      if(ev.t==='fill'){ floodFill(l.ctx,ev.x,ev.y,ev.color,ev.op); }
+      if(ev.t==='fill'){ let match=l.canvas; if(ev.refIds&&ev.refIds.length){ const refs=ev.refIds.map(id=>layers.find(x=>x.id===id)).filter(Boolean); if(refs.length) match=buildRefCanvas(refs,CW,CH); } bucketFill(match,l.ctx,ev.x,ev.y,ev.color,ev.op,CW,CH); }
       else if(ev.t==='clear'){ l.ctx.clearRect(0,0,CW,CH); }
       else if(ev.t==='move'){ const mv=document.createElement('canvas'); mv.width=CW; mv.height=CH; mv.getContext('2d').drawImage(l.canvas,0,0); l.ctx.clearRect(0,0,CW,CH); l.ctx.drawImage(mv,ev.dx,ev.dy); }
       else if(ev.t==='st'){ stc.clearRect(0,0,CW,CH); stc.strokeStyle=ev.color; stc.fillStyle=ev.color; const n=ev.pts.length/2;
         if(ev.tool==='airbrush'){ for(let k=0;k<n;k++) airStampInto(stc,ev.color,ev.size,{x:ev.pts[k*2],y:ev.pts[k*2+1]},(ev.seed||1)+k); }
         else { if(n===1){ wetSeg(stc,ev.tool,ev.color,ev.size,{x:ev.pts[0],y:ev.pts[1]},{x:ev.pts[0]+0.01,y:ev.pts[1]},ev.shape,ev.angle); }
-          for(let k=1;k<n;k++) wetSeg(stc,ev.tool,ev.color,ev.size,{x:ev.pts[(k-1)*2],y:ev.pts[(k-1)*2+1]},{x:ev.pts[k*2],y:ev.pts[k*2+1]},ev.shape,ev.angle); }
+          for(let k=1;k<n;k++) wetSeg(stc,ev.tool,ev.color,ev.size,{x:ev.pts[(k-1)*2],y:ev.pts[(k-1)*2+1]},{x:ev.pts[k*2],y:ev.pts[k*2+1]},ev.shape,ev.angle);
+          if(ev.binary) thresholdRegion(stc,0,0,CW,CH); }
         l.ctx.save(); l.ctx.globalAlpha=ev.op; l.ctx.globalCompositeOperation=(ev.tool==='eraser')?'destination-out':'source-over'; l.ctx.drawImage(strokeTmp,0,0); l.ctx.restore();
       }
     });
@@ -918,6 +1024,7 @@
   document.querySelectorAll('.shape-btn').forEach(b=>b.addEventListener('click',()=>{ tool.shape=b.dataset.shape;
     document.querySelectorAll('.shape-btn').forEach(x=>x.classList.toggle('active',x===b));
     document.getElementById('angleField').style.display = (tool.shape==='flat')?'flex':'none'; }));
+  document.getElementById('binaryToggle').addEventListener('click',e=>{ tool.binary=!tool.binary; e.currentTarget.classList.toggle('on',tool.binary); toast(tool.binary?'2値ペン: ON':'2値ペン: OFF'); });
   const angleR=document.getElementById('angleRange');
   angleR.addEventListener('input',e=>{ tool.angle=+e.target.value; document.getElementById('angleVal').innerHTML=tool.angle+'&deg;'; });
 
@@ -927,9 +1034,10 @@
   smR.addEventListener('input',e=>{ tool.smooth=+e.target.value; document.getElementById('smoothVal').textContent=e.target.value; });
 
   document.getElementById('addLayer').addEventListener('click',()=>{ addLayer(); pushHistory(); toast('レイヤーを追加'); });
-  document.getElementById('dupLayer').addEventListener('click',()=>{ const l=activeLayer(); if(!l)return; const nl=makeLayer(l.name+' コピー'); nl.ctx.drawImage(l.canvas,0,0); nl.opacity=l.opacity; nl.mode=l.mode;
+  document.getElementById('dupLayer').addEventListener('click',()=>{ const l=activeLayer(); if(!l)return; const nl=makeLayer(l.name+' コピー'); nl.ctx.drawImage(l.canvas,0,0); nl.opacity=l.opacity; nl.mode=l.mode; nl.ref=l.ref;
     const idx=layers.findIndex(x=>x.id===activeId); layers.splice(idx+1,0,nl); activeId=nl.id; renderLayerList(); redraw(); pushHistory(); toast('複製しました'); });
-  document.getElementById('delLayer').addEventListener('click',()=>{ if(layers.length<=1){ toast('最後のレイヤーは消せません'); return; }
+  document.getElementById('delLayer').addEventListener('click',()=>{
+    if(layers.length<=1){ const l=activeLayer(); if(l){ l.ctx.clearRect(0,0,CW,CH); record.events.push({t:'clear',lid:l.id}); updateThumb(l); redraw(); pushHistory(); toast('画面をクリアしました'); } return; }
     const idx=layers.findIndex(x=>x.id===activeId); layers.splice(idx,1); activeId=(layers[idx]||layers[idx-1]||layers[0]).id; renderLayerList(); redraw(); pushHistory(); toast('レイヤーを削除'); });
   document.getElementById('mergeLayer').addEventListener('click',()=>{ const idx=layers.findIndex(x=>x.id===activeId); if(idx<=0){ toast('下にレイヤーがありません'); return; }
     const upper=layers[idx],lower=layers[idx-1]; lower.ctx.save(); lower.ctx.globalAlpha=upper.opacity; lower.ctx.globalCompositeOperation=upper.mode; lower.ctx.drawImage(upper.canvas,0,0); lower.ctx.restore();
