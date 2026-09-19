@@ -377,6 +377,7 @@
 <div class="player" id="player">
   <div class="player-box">
     <div class="player-top"><div class="opt-title">おえかきの過程</div><div class="head-spacer"></div>
+      <button class="head-btn primary" id="exportVideo" title="過程をアニメ動画として保存（Xなどに投稿できます）">動画で保存</button>
       <button class="head-btn" id="loadIntoEditor">この絵を編集する</button>
       <button class="head-btn" id="closePlayer">とじる</button></div>
     <div class="player-canvas"><canvas id="playCanvas"></canvas></div>
@@ -947,6 +948,7 @@
         if(ev.refIds&&ev.refIds.length){ const refs=ev.refIds.map(id=>playLayer(id)).filter(Boolean); if(refs.length) match=buildRefCanvas(refs,play.pw,play.ph); }
         bucketFill(match,l.ctx,ev.x,ev.y,ev.color,ev.op,play.pw,play.ph);
       } }
+    else if(ev.t==='bgfill'){ endActiveStroke(); const l=playLayer(ev.lid); if(l){ l.ctx.save(); if(ev.mode==='under')l.ctx.globalCompositeOperation='destination-over'; l.ctx.fillStyle=ev.color||'#ffffff'; l.ctx.fillRect(0,0,play.pw,play.ph); l.ctx.restore(); } }
     else if(ev.t==='clear'){ endActiveStroke(); const l=playLayer(ev.lid); if(l)l.ctx.clearRect(0,0,play.pw,play.ph); }
     else if(ev.t==='move'){ endActiveStroke(); const l=playLayer(ev.lid); if(l){ const t=document.createElement('canvas'); t.width=play.pw; t.height=play.ph; t.getContext('2d').drawImage(l.canvas,0,0); l.ctx.clearRect(0,0,play.pw,play.ph); l.ctx.drawImage(t,ev.dx,ev.dy); } }
     else if(ev.t==='st'){
@@ -1008,7 +1010,41 @@
     if(want){ if(play.idx>=play.total){ seekTo(0); } play.playing=true; document.getElementById('pPlay').innerHTML='&#10073;&#10073;'; if(!playRAF)playRAF=requestAnimationFrame(tick); }
     else { play.playing=false; document.getElementById('pPlay').innerHTML='&#9654;'; }
   }
-  function closePlayer(){ if(play)play.playing=false; if(playRAF){cancelAnimationFrame(playRAF);playRAF=null;} player.classList.remove('open'); }
+  function closePlayer(){ exporting=false; if(play)play.playing=false; if(playRAF){cancelAnimationFrame(playRAF);playRAF=null;} player.classList.remove('open'); }
+
+  // ---------- アニメを動画として書き出し(X等に投稿できる。埋め込みPNGと違い再エンコードに強い) ----------
+  let exporting=false;
+  function pickVideoMime(){ if(!window.MediaRecorder) return '';
+    const cands=['video/mp4;codecs=avc1.42E01E','video/mp4','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];
+    for(const t of cands){ try{ if(MediaRecorder.isTypeSupported(t)) return t; }catch(e){} } return ''; }
+  function exportVideo(){
+    if(!play || exporting) return;
+    if(!playCanvas.captureStream){ toast('この環境では動画保存に未対応です'); return; }
+    const mime=pickVideoMime(); if(!mime){ toast('この環境では動画保存に未対応です'); return; }
+    exporting=true; play.playing=false; if(playRAF){cancelAnimationFrame(playRAF);playRAF=null;}
+    const btn=document.getElementById('exportVideo'); const label=btn.textContent; btn.textContent='録画中…'; btn.disabled=true;
+    seekTo(0);
+    let stream, recr;
+    try{ stream=playCanvas.captureStream(30); recr=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:12000000}); }
+    catch(e){ exporting=false; btn.textContent=label; btn.disabled=false; toast('録画を開始できませんでした'); return; }
+    const chunks=[]; recr.ondataavailable=e=>{ if(e.data&&e.data.size)chunks.push(e.data); };
+    recr.onstop=()=>{ const ext=mime.indexOf('mp4')>=0?'mp4':'webm'; const blob=new Blob(chunks,{type:mime});
+      const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='drawr_anime_'+Date.now()+'.'+ext; a.click();
+      setTimeout(()=>URL.revokeObjectURL(url),4000);
+      exporting=false; btn.textContent=label; btn.disabled=false;
+      toast(ext==='mp4'?'動画(MP4)を保存しました':'動画(WebM)を保存しました');
+    };
+    recr.start();
+    const fps=60, durSec=Math.max(4, Math.min(30, play.total/220));   // 長い絵ほど長く(上限30秒)
+    const spf=Math.max(1, Math.ceil(play.total/(durSec*fps)));
+    function frame(){
+      if(!exporting){ return; }
+      if(play.idx<play.total){ for(let i=0;i<spf && play.idx<play.total;i++) stepForward(); renderPlay();
+        document.getElementById('pSeek').value=play.idx; updatePTime(); requestAnimationFrame(frame); }
+      else { renderPlay(); setTimeout(()=>{ try{ recr.stop(); }catch(e){} }, 700); }   // 最後のフレームを少し見せてから停止
+    }
+    requestAnimationFrame(frame);
+  }
 
   function loadRecIntoEditor(){
     if(!play)return; const rec=play.rec;
@@ -1020,7 +1056,8 @@
     const strokeTmp=document.createElement('canvas'); strokeTmp.width=CW; strokeTmp.height=CH; const stc=strokeTmp.getContext('2d');
     rec.events.forEach(ev=>{
       const l=layers.find(x=>x.id===ev.lid); if(!l)return;
-      if(ev.t==='fill'){ let match=l.canvas; if(ev.refIds&&ev.refIds.length){ const refs=ev.refIds.map(id=>layers.find(x=>x.id===id)).filter(Boolean); if(refs.length) match=buildRefCanvas(refs,CW,CH); } bucketFill(match,l.ctx,ev.x,ev.y,ev.color,ev.op,CW,CH); }
+      if(ev.t==='bgfill'){ l.ctx.save(); if(ev.mode==='under')l.ctx.globalCompositeOperation='destination-over'; l.ctx.fillStyle=ev.color||'#ffffff'; l.ctx.fillRect(0,0,CW,CH); l.ctx.restore(); }
+      else if(ev.t==='fill'){ let match=l.canvas; if(ev.refIds&&ev.refIds.length){ const refs=ev.refIds.map(id=>layers.find(x=>x.id===id)).filter(Boolean); if(refs.length) match=buildRefCanvas(refs,CW,CH); } bucketFill(match,l.ctx,ev.x,ev.y,ev.color,ev.op,CW,CH); }
       else if(ev.t==='clear'){ l.ctx.clearRect(0,0,CW,CH); }
       else if(ev.t==='move'){ const mv=document.createElement('canvas'); mv.width=CW; mv.height=CH; mv.getContext('2d').drawImage(l.canvas,0,0); l.ctx.clearRect(0,0,CW,CH); l.ctx.drawImage(mv,ev.dx,ev.dy); }
       else if(ev.t==='st'){ stc.clearRect(0,0,CW,CH); stc.strokeStyle=ev.color; stc.fillStyle=ev.color; const n=ev.pts.length/2;
@@ -1041,7 +1078,7 @@
   // replay current in-editor drawing
   function replayCurrent(){
     const evs=currentEvents();
-    if(!evs.length){ toast('まだ描いていません'); return; }
+    if(!evs.some(e=>e.t!=='bgfill')){ toast('まだ描いていません'); return; }
     const payload={ v:1, w:CW, h:CH,
       layers: layers.map(l=>({id:l.id,name:l.name,opacity:l.opacity,mode:l.mode,visible:l.visible})),
       events: evs };
@@ -1102,6 +1139,8 @@
     const idx=layers.findIndex(x=>x.id===activeId); layers.splice(idx,1); activeId=(layers[idx]||layers[idx-1]||layers[0]).id; renderLayerList(); redraw(); pushHistory(); toast('レイヤーを削除'); });
   document.getElementById('mergeLayer').addEventListener('click',()=>{ const idx=layers.findIndex(x=>x.id===activeId); if(idx<=0){ toast('下にレイヤーがありません'); return; }
     const upper=layers[idx],lower=layers[idx-1]; lower.ctx.save(); lower.ctx.globalAlpha=upper.opacity; lower.ctx.globalCompositeOperation=upper.mode; lower.ctx.drawImage(upper.canvas,0,0); lower.ctx.restore();
+    // 統合で消える上レイヤーを指す過去の記録を、統合先(下レイヤー)に付け替える → 再生でストロークが消えない
+    record.events.forEach(ev=>{ if(ev.lid===upper.id)ev.lid=lower.id; if(ev.refIds)ev.refIds=ev.refIds.map(id=>id===upper.id?lower.id:id); });
     layers.splice(idx,1); activeId=lower.id; renderLayerList(); redraw(); pushHistory(); toast('統合しました'); });
   document.getElementById('upLayer').addEventListener('click',()=>moveLayer(1));
   document.getElementById('downLayer').addEventListener('click',()=>moveLayer(-1));
@@ -1118,6 +1157,7 @@
   document.getElementById('clearBtn').addEventListener('click',()=>{ const l=activeLayer(); if(!l)return; l.ctx.clearRect(0,0,CW,CH);
     recordEvent({t:'clear',lid:l.id}); updateThumb(l); redraw(); pushHistory(); toast('レイヤーをクリア'); });
   document.getElementById('bgBtn').addEventListener('click',()=>{ const l=activeLayer(); if(!l)return; l.ctx.save(); l.ctx.globalCompositeOperation='destination-over'; l.ctx.fillStyle='#ffffff'; l.ctx.fillRect(0,0,CW,CH); l.ctx.restore();
+    recordEvent({t:'bgfill',lid:l.id,color:'#ffffff',mode:'under'});
     updateThumb(l); redraw(); pushHistory(); toast('背景を白紙にしました'); });
   document.getElementById('replayBtn').addEventListener('click',replayCurrent);
   // ---------- resize dialog (no prompt(); works inside sandboxed iframe + standalone) ----------
@@ -1165,6 +1205,7 @@
   document.getElementById('pSeek').addEventListener('input',e=>{ togglePlay(false); seekTo(+e.target.value); });
   document.getElementById('pSpeed').addEventListener('change',e=>{ if(play)play.speed=+e.target.value; });
   document.getElementById('closePlayer').addEventListener('click',closePlayer);
+  document.getElementById('exportVideo').addEventListener('click',exportVideo);
   document.getElementById('loadIntoEditor').addEventListener('click',loadRecIntoEditor);
   player.addEventListener('click',e=>{ if(e.target===player)closePlayer(); });
 
@@ -1196,6 +1237,7 @@
     const base=makeLayer('レイヤー 1'); base.ctx.fillStyle='#ffffff'; base.ctx.fillRect(0,0,CW,CH);
     layers=[base]; activeId=base.id;
     record={ v:1, w:CW, h:CH, layers:[], events:[] };
+    recordEvent({t:'bgfill',lid:base.id,color:'#ffffff'});   // 初期の白背景を再生でも再現できるよう記録
     buildBasicPalette(); renderRecent(); renderMyPalette(); buildSizePresets(); buildRzPresets();
     setColor('#3a4a54',false); renderLayerList(); redraw(); fitZoom();
     selectTool('pen'); pushHistory(); updateUndoRedo();
