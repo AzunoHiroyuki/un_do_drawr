@@ -366,11 +366,30 @@
         <div class="field-row"><label>許容差</label><span class="val" id="wandTolVal">32</span></div>
         <input type="range" id="wandTol" min="0" max="128" value="32">
       </div>
+      <div class="field">
+        <div class="field-row"><label>選択モード</label></div>
+        <select class="layer-mode" id="wandMode">
+          <option value="new">新規選択(選び直す)</option>
+          <option value="add">追加選択(続けて選ぶ)</option>
+        </select>
+      </div>
       <button class="head-btn" id="selFill" style="width:100%;justify-content:center;">選択範囲を塗る</button>
       <button class="head-btn" id="selClear" style="width:100%;justify-content:center;">選択範囲を消す</button>
       <button class="head-btn" id="selInvert" style="width:100%;justify-content:center;">選択を反転</button>
       <button class="head-btn" id="selNone" style="width:100%;justify-content:center;">選択を解除</button>
       <div class="layer-hint" style="padding:0;">キャンバスをクリックすると、近い色の範囲を選択します。塗り/消しは今のレイヤーに適用されます。</div>
+    </div>
+
+    <div class="field" id="fillOptions" style="display:none;">
+      <div class="opt-title">ぬりつぶし</div>
+      <div class="field">
+        <div class="field-row"><label>境界の参照</label></div>
+        <select class="layer-mode" id="fillRef">
+          <option value="composite">統合画像(見えている絵全体)</option>
+          <option value="layer">現在のレイヤーだけ</option>
+        </select>
+      </div>
+      <div class="layer-hint" style="padding:0;">「統合画像」は別レイヤーの線も境界にします。色は今のレイヤーに塗られます。</div>
     </div>
 
     <div class="field">
@@ -456,7 +475,6 @@
         <option value="saturation">彩度</option><option value="color">カラー</option><option value="luminosity">輝度</option>
       </select>
     </div>
-    <div class="layer-hint">各レイヤーの右の <b>&#10003;</b> を入れると、そのレイヤーの線を<b>塗りつぶしの境界</b>として参照します（色は今のレイヤーに塗られます）。</div>
     <div class="layer-list" id="layerList"></div>
   </div>
 </main>
@@ -514,12 +532,15 @@
   // the composited result (at tool opacity). The DOM #inputCanvas captures pointer
   // events only and is never drawn on.
   const wet = document.createElement('canvas'); let wctx;
+  const clipC = document.createElement('canvas'); let clipctx;   // 選択クリップ用スクラッチ
+  let selMaskCanvas = null;                                       // 現在の選択のマスク画像(白=選択内)
   const navCanvas = document.getElementById('navCanvas'); const nctx = navCanvas.getContext('2d'); let navScale = 1;
 
   let layers = [], activeId = null, layerSeq = 0;
   const history = []; let histIndex = -1;
-  const tool = { name:'pen', color:'#3a4a54', size:8, opacity:1, smooth:3, shape:'round', angle:45, binary:false,
-    text:{ font:'sans-serif', size:36, bold:false, layout:'straight', pathType:'freehand', radius:120, startDeg:-90, dir:1, side:'out' }, selTol:32 };
+  const tool = { name:'pen', color:'#3a4a54', size:8, opacity:1, smooth:3, shape:'round', angle:45, binary:true,
+    text:{ font:'sans-serif', size:36, bold:false, layout:'straight', pathType:'freehand', radius:120, startDeg:-90, dir:1, side:'out' },
+    selTol:32, fillRef:'composite', wandAdd:false };
   let selection = null;   // { mask:Uint8Array(CW*CH), edges:[[x,y]...] }
   let textPath = null;    // 確定/作成中の文字パスの点列 [x,y,x,y,...]
   let pathDragging = false; // フリーハンドでパスをなぞっている最中
@@ -611,7 +632,7 @@
         tctx.save();
         tctx.globalAlpha=tool.opacity;
         tctx.globalCompositeOperation=(tool.name==='eraser')?'destination-out':'source-over';
-        tctx.drawImage(wet,0,0);
+        tctx.drawImage(clipToSelection(wet),0,0);
         tctx.restore();
         cctx.drawImage(tmp,0,0);
       } else {
@@ -679,7 +700,7 @@
 
   function applyZoom(){ const w=Math.round(CW*zoom),h=Math.round(CH*zoom); wrap.style.width=w+'px'; wrap.style.height=h+'px';
     [composite,input,cursorLayer,selLayer].forEach(cv=>{cv.style.width=w+'px'; cv.style.height=h+'px';}); document.getElementById('zoomVal').textContent=Math.round(zoom*100)+'%'; scheduleNav(); }
-  function setCanvasSize(){ [composite,input,cursorLayer,selLayer].forEach(cv=>{cv.width=CW; cv.height=CH;}); tmp.width=CW; tmp.height=CH; tctx=tmp.getContext('2d'); wet.width=CW; wet.height=CH; wctx=wet.getContext('2d'); layoutNav(); applyZoom(); }
+  function setCanvasSize(){ [composite,input,cursorLayer,selLayer].forEach(cv=>{cv.width=CW; cv.height=CH;}); tmp.width=CW; tmp.height=CH; tctx=tmp.getContext('2d'); wet.width=CW; wet.height=CH; wctx=wet.getContext('2d'); clipC.width=CW; clipC.height=CH; clipctx=clipC.getContext('2d'); layoutNav(); applyZoom(); }
   function fitZoom(){ const pad=48; zoom=Math.max(0.1,Math.min((stage.clientWidth-pad)/CW,(stage.clientHeight-pad)/CH,1)); applyZoom(); }
 
   // ---------- history ----------
@@ -713,7 +734,11 @@
       moving={lid:l.id, snap, sx:p.x, sy:p.y, dx:0, dy:0};
       input.setPointerCapture&&input.setPointerCapture(e.pointerId); return; }
     if(tool.name==='eyedropper'){ pickColor(p); return; }
-    if(tool.name==='wand'){ const sel=buildMask(composite, Math.floor(p.x), Math.floor(p.y), tool.selTol); setSelection(sel); if(!sel)toast('選択できませんでした'); else toast('範囲を選択しました'); return; }
+    if(tool.name==='wand'){ const sel=buildMask(composite, Math.floor(p.x), Math.floor(p.y), tool.selTol);
+      if(!sel){ toast('選択できませんでした'); return; }
+      if(tool.wandAdd && selection){ const m=selection.mask, nm=sel.mask, u=new Uint8Array(m.length); for(let i=0;i<m.length;i++)u[i]=(m[i]||nm[i])?1:0; setSelection(maskToSelection(u), true); toast('選択に追加しました'); }
+      else { setSelection(sel, true); toast('範囲を選択しました'); }
+      return; }
     if(tool.name==='text'){
       if(pendingText) return;                       // 入力中はキャンバス操作を無視
       if(tool.text.layout==='path'){
@@ -730,11 +755,12 @@
     }
     if(tool.name==='fill'){ const l=activeLayer(); if(l){ pushHistory();
       const fx=Math.floor(p.x), fy=Math.floor(p.y);
-      const refs=layers.filter(x=>x.ref && x.visible);
-      const refIds=refs.map(x=>x.id);
-      const matchCanvas = refs.length ? buildRefCanvas(refs,CW,CH) : l.canvas;
-      bucketFill(matchCanvas, l.ctx, fx, fy, tool.color, tool.opacity, CW, CH);
-      recordEvent({t:'fill',lid:l.id,color:tool.color,op:tool.opacity,x:fx,y:fy,refIds:refIds});
+      const matchCanvas = (tool.fillRef==='composite') ? composite : l.canvas;   // 境界の参照をツールで選択
+      if(selMaskCanvas){ const t=document.createElement('canvas'); t.width=CW;t.height=CH;
+        bucketFill(matchCanvas, t.getContext('2d'), fx, fy, tool.color, tool.opacity, CW, CH);
+        l.ctx.drawImage(clipToSelection(t),0,0); }
+      else bucketFill(matchCanvas, l.ctx, fx, fy, tool.color, tool.opacity, CW, CH);
+      recordEvent({t:'fill',lid:l.id,color:tool.color,op:tool.opacity,x:fx,y:fy,fillRef:tool.fillRef});
       redraw(); updateThumb(l); } return; }
 
     const l=activeLayer(); if(!l||!l.visible){ toast(l?'レイヤーが非表示です':'レイヤーがありません'); return; }
@@ -782,10 +808,11 @@
     if(!drawing)return; drawing=false;
     if(airTimer){ clearInterval(airTimer); airTimer=null; airPos=null; }
     const l=activeLayer();
+    const clipped = selMaskCanvas ? clipToSelection(wet) : wet;
     if(l){ l.ctx.save(); l.ctx.globalAlpha=tool.opacity; l.ctx.globalCompositeOperation=(tool.name==='eraser')?'destination-out':'source-over';
-      l.ctx.drawImage(wet,0,0); l.ctx.restore(); updateThumb(l); }
+      l.ctx.drawImage(clipped,0,0); l.ctx.restore(); updateThumb(l); }
     wctx.clearRect(0,0,CW,CH); redraw();
-    if(curStroke && curStroke.pts.length>=2){ recordEvent(curStroke); }
+    if(curStroke && curStroke.pts.length>=2){ if(selection)curStroke.clip=true; recordEvent(curStroke); }
     curStroke=null;
     pushHistory();
   }
@@ -840,6 +867,10 @@
   // 参照レイヤー(ref=true かつ表示中)を1枚に合成した境界判定用キャンバスを作る
   function buildRefCanvas(layerList, w, h){ const c=document.createElement('canvas'); c.width=w; c.height=h; const cx=c.getContext('2d');
     for(const l of layerList) cx.drawImage(l.canvas,0,0); return c; }
+  // 見えているレイヤーを不透明度・合成モードを反映して1枚に(塗りつぶしの「統合画像」境界用)
+  function mergeVisible(layerList, w, h){ const c=document.createElement('canvas'); c.width=w; c.height=h; const cx=c.getContext('2d');
+    for(const l of layerList){ if(l.visible===false||l.opacity<=0)continue; cx.globalAlpha=(l.opacity!=null?l.opacity:1); cx.globalCompositeOperation=l.mode||'source-over'; cx.drawImage(l.canvas,0,0); }
+    cx.globalAlpha=1; cx.globalCompositeOperation='source-over'; return c; }
 
   // ---------- text rendering (shared: editor & playback) ----------
   function applyTextFont(ctx, ev){ ctx.font=(ev.bold?'bold ':'')+ev.size+'px '+ev.font; ctx.fillStyle=ev.color; }
@@ -961,6 +992,12 @@
   }
   function maskCanvasOf(mask){ const c=document.createElement('canvas'); c.width=CW; c.height=CH; const cx=c.getContext('2d');
     const img=cx.createImageData(CW,CH); for(let i=0;i<mask.length;i++){ if(mask[i]) img.data[i*4+3]=255; } cx.putImageData(img,0,0); return c; }
+  function maskCanvasSized(mask,w,h){ const c=document.createElement('canvas'); c.width=w; c.height=h; const cx=c.getContext('2d');
+    const img=cx.createImageData(w,h); for(let i=0;i<mask.length&&i<w*h;i++){ if(mask[i]) img.data[i*4+3]=255; } cx.putImageData(img,0,0); return c; }
+  // 選択がある場合、描画内容を選択範囲内に制限したキャンバスを返す(無ければ元をそのまま)
+  function clipToSelection(srcCanvas){ if(!selMaskCanvas) return srcCanvas;
+    clipctx.clearRect(0,0,CW,CH); clipctx.globalCompositeOperation='source-over'; clipctx.drawImage(srcCanvas,0,0);
+    clipctx.globalCompositeOperation='destination-in'; clipctx.drawImage(selMaskCanvas,0,0); clipctx.globalCompositeOperation='source-over'; return clipC; }
 
   let antPhase=0, antTimer=null;
   function startAnts(){ if(antTimer)return; antTimer=setInterval(()=>{ antPhase=(antPhase+1)&7; drawSelectionOverlay(); }, 130); }
@@ -978,6 +1015,7 @@
   }
   function setSelection(sel, record){
     selection=sel;
+    selMaskCanvas = selection ? maskCanvasOf(selection.mask) : null;
     if(selection){ startAnts(); drawSelectionOverlay(); if(record) recordEvent({t:'selset', rle:encodeRLE(selection.mask)}); }
     else { stopAnts(); selctx.clearRect(0,0,CW,CH); if(record) recordEvent({t:'selclear'}); }
   }
@@ -1017,9 +1055,7 @@
       const name=document.createElement('div'); name.className='layer-name'; name.textContent=l.name;
       name.addEventListener('dblclick',ev=>{ ev.stopPropagation(); const inp=document.createElement('input'); inp.value=l.name; name.textContent=''; name.appendChild(inp); inp.focus(); inp.select();
         const done=()=>{ l.name=inp.value.trim()||l.name; renderLayerList(); }; inp.addEventListener('blur',done); inp.addEventListener('keydown',k=>{if(k.key==='Enter')inp.blur();}); });
-      const ref=document.createElement('div'); ref.className='layer-ref'+(l.ref?' on':''); ref.title='塗りつぶしの参照にする（この線を境界として使う）';
-      ref.addEventListener('click',ev=>{ ev.stopPropagation(); l.ref=!l.ref; renderLayerList(); });
-      item.appendChild(handle); item.appendChild(vis); item.appendChild(thumbBox); item.appendChild(name); item.appendChild(ref);
+      item.appendChild(handle); item.appendChild(vis); item.appendChild(thumbBox); item.appendChild(name);
       item.addEventListener('click',()=>{ if(layerDrag && layerDrag.moved) return; activeId=l.id; renderLayerList(); syncLayerControls(); });
       handle.addEventListener('pointerdown',ev=>{ ev.preventDefault(); ev.stopPropagation(); startLayerDrag(ev,l.id,item,handle); });
       list.appendChild(item);
@@ -1205,23 +1241,29 @@
   function resetPlayLayers(){
     play.layers = play.rec.layers.map(m=>{ const c=document.createElement('canvas'); c.width=play.pw; c.height=play.ph;
       return { id:m.id, canvas:c, ctx:c.getContext('2d'), opacity:m.opacity, mode:m.mode, visible:m.visible }; });
-    play.idx=0; play.active=null; if(play.stctx)play.stctx.clearRect(0,0,play.pw,play.ph);
+    play.idx=0; play.active=null; play.sel=null; if(play.stctx)play.stctx.clearRect(0,0,play.pw,play.ph);
   }
   function playLayer(id){ return play.layers.find(l=>l.id===id); }
+  function playClip(src){ if(!play.sel) return src; const c=document.createElement('canvas'); c.width=play.pw; c.height=play.ph; const x=c.getContext('2d');
+    x.drawImage(src,0,0); x.globalCompositeOperation='destination-in'; x.drawImage(play.sel,0,0); return c; }
 
   function endActiveStroke(){
     if(!play.active)return; const a=play.active, l=playLayer(a.lid);
-    if(l){ l.ctx.save(); l.ctx.globalAlpha=a.op; l.ctx.globalCompositeOperation=(a.tool==='eraser')?'destination-out':'source-over';
-      l.ctx.drawImage(play.strokeTmp,0,0); l.ctx.restore(); }
+    if(l){ const src=play.sel?playClip(play.strokeTmp):play.strokeTmp; l.ctx.save(); l.ctx.globalAlpha=a.op; l.ctx.globalCompositeOperation=(a.tool==='eraser')?'destination-out':'source-over';
+      l.ctx.drawImage(src,0,0); l.ctx.restore(); }
     play.stctx.clearRect(0,0,play.pw,play.ph); play.active=null;
   }
 
   function stepForward(){
     const atom=play.atoms[play.idx]; if(!atom)return; const ev=atom.ev;
-    if(ev.t==='fill'){ endActiveStroke(); const l=playLayer(ev.lid); if(l){
+    if(ev.t==='selset'){ endActiveStroke(); play.sel = ev.rle ? maskCanvasSized(decodeRLE(ev.rle),play.pw,play.ph) : null; }
+    else if(ev.t==='selclear'){ endActiveStroke(); play.sel=null; }
+    else if(ev.t==='fill'){ endActiveStroke(); const l=playLayer(ev.lid); if(l){
         let match=l.canvas;
-        if(ev.refIds&&ev.refIds.length){ const refs=ev.refIds.map(id=>playLayer(id)).filter(Boolean); if(refs.length) match=buildRefCanvas(refs,play.pw,play.ph); }
-        bucketFill(match,l.ctx,ev.x,ev.y,ev.color,ev.op,play.pw,play.ph);
+        if(ev.fillRef==='composite') match=mergeVisible(play.layers,play.pw,play.ph);
+        else if(ev.refIds&&ev.refIds.length){ const refs=ev.refIds.map(id=>playLayer(id)).filter(Boolean); if(refs.length) match=buildRefCanvas(refs,play.pw,play.ph); }
+        if(play.sel){ const t=document.createElement('canvas'); t.width=play.pw;t.height=play.ph; bucketFill(match,t.getContext('2d'),ev.x,ev.y,ev.color,ev.op,play.pw,play.ph); l.ctx.drawImage(playClip(t),0,0); }
+        else bucketFill(match,l.ctx,ev.x,ev.y,ev.color,ev.op,play.pw,play.ph);
       } }
     else if(ev.t==='bgfill'){ endActiveStroke(); const l=playLayer(ev.lid); if(l){ l.ctx.save(); if(ev.mode==='under')l.ctx.globalCompositeOperation='destination-over'; l.ctx.fillStyle=ev.color||'#ffffff'; l.ctx.fillRect(0,0,play.pw,play.ph); l.ctx.restore(); } }
     else if(ev.t==='clear'){ endActiveStroke(); const l=playLayer(ev.lid); if(l)l.ctx.clearRect(0,0,play.pw,play.ph); }
@@ -1259,7 +1301,7 @@
       if(play.active&&play.active.lid===l.id){
         play.scctx.clearRect(0,0,play.pw,play.ph); play.scctx.drawImage(l.canvas,0,0);
         play.scctx.save(); play.scctx.globalAlpha=play.active.op; play.scctx.globalCompositeOperation=(play.active.tool==='eraser')?'destination-out':'source-over';
-        play.scctx.drawImage(play.strokeTmp,0,0); play.scctx.restore();
+        play.scctx.drawImage(play.sel?playClip(play.strokeTmp):play.strokeTmp,0,0); play.scctx.restore();
         pctx.drawImage(play.scratch,0,0);
       } else pctx.drawImage(l.canvas,0,0);
     }
@@ -1332,10 +1374,18 @@
     layers=rec.layers.map(m=>{ const l=makeLayer(m.name); l.id=m.id; l.opacity=m.opacity; l.mode=m.mode; l.visible=m.visible; if(m.id>layerSeq)layerSeq=m.id; return l; });
     // replay events fully
     const strokeTmp=document.createElement('canvas'); strokeTmp.width=CW; strokeTmp.height=CH; const stc=strokeTmp.getContext('2d');
+    let curSel=null;
+    const clipSrc=(src)=>{ if(!curSel)return src; const c=document.createElement('canvas'); c.width=CW;c.height=CH; const x=c.getContext('2d'); x.drawImage(src,0,0); x.globalCompositeOperation='destination-in'; x.drawImage(curSel,0,0); return c; };
     rec.events.forEach(ev=>{
+      if(ev.t==='selset'){ curSel = ev.rle?maskCanvasSized(decodeRLE(ev.rle),CW,CH):null; return; }
+      if(ev.t==='selclear'){ curSel=null; return; }
       const l=layers.find(x=>x.id===ev.lid); if(!l)return;
       if(ev.t==='bgfill'){ l.ctx.save(); if(ev.mode==='under')l.ctx.globalCompositeOperation='destination-over'; l.ctx.fillStyle=ev.color||'#ffffff'; l.ctx.fillRect(0,0,CW,CH); l.ctx.restore(); }
-      else if(ev.t==='fill'){ let match=l.canvas; if(ev.refIds&&ev.refIds.length){ const refs=ev.refIds.map(id=>layers.find(x=>x.id===id)).filter(Boolean); if(refs.length) match=buildRefCanvas(refs,CW,CH); } bucketFill(match,l.ctx,ev.x,ev.y,ev.color,ev.op,CW,CH); }
+      else if(ev.t==='fill'){ let match=l.canvas;
+        if(ev.fillRef==='composite') match=mergeVisible(layers,CW,CH);
+        else if(ev.refIds&&ev.refIds.length){ const refs=ev.refIds.map(id=>layers.find(x=>x.id===id)).filter(Boolean); if(refs.length) match=buildRefCanvas(refs,CW,CH); }
+        if(curSel){ const t=document.createElement('canvas'); t.width=CW;t.height=CH; bucketFill(match,t.getContext('2d'),ev.x,ev.y,ev.color,ev.op,CW,CH); l.ctx.drawImage(clipSrc(t),0,0); }
+        else bucketFill(match,l.ctx,ev.x,ev.y,ev.color,ev.op,CW,CH); }
       else if(ev.t==='clear'){ l.ctx.clearRect(0,0,CW,CH); }
       else if(ev.t==='move'){ const mv=document.createElement('canvas'); mv.width=CW; mv.height=CH; mv.getContext('2d').drawImage(l.canvas,0,0); l.ctx.clearRect(0,0,CW,CH); l.ctx.drawImage(mv,ev.dx,ev.dy); }
       else if(ev.t==='text'){ drawTextOnto(l.ctx, ev); }
@@ -1346,7 +1396,7 @@
         else { if(n===1){ wetSeg(stc,ev.tool,ev.color,ev.size,{x:ev.pts[0],y:ev.pts[1]},{x:ev.pts[0]+0.01,y:ev.pts[1]},ev.shape,ev.angle); }
           for(let k=1;k<n;k++) wetSeg(stc,ev.tool,ev.color,ev.size,{x:ev.pts[(k-1)*2],y:ev.pts[(k-1)*2+1]},{x:ev.pts[k*2],y:ev.pts[k*2+1]},ev.shape,ev.angle);
           if(ev.binary) thresholdRegion(stc,0,0,CW,CH); }
-        l.ctx.save(); l.ctx.globalAlpha=ev.op; l.ctx.globalCompositeOperation=(ev.tool==='eraser')?'destination-out':'source-over'; l.ctx.drawImage(strokeTmp,0,0); l.ctx.restore();
+        l.ctx.save(); l.ctx.globalAlpha=ev.op; l.ctx.globalCompositeOperation=(ev.tool==='eraser')?'destination-out':'source-over'; l.ctx.drawImage(clipSrc(strokeTmp),0,0); l.ctx.restore();
       }
     });
     activeId=layers.length?layers[layers.length-1].id:null;
@@ -1375,6 +1425,7 @@
     // ツール別オプションの表示切替
     document.getElementById('textOptions').style.display = (name==='text')?'flex':'none';
     document.getElementById('wandOptions').style.display = (name==='wand')?'flex':'none';
+    document.getElementById('fillOptions').style.display = (name==='fill')?'flex':'none';
     if(name==='text'){ updateTextSubOpts(); } else { cancelText(); cancelTextPath(); }
   }
 
@@ -1405,9 +1456,12 @@
 
   // ---- 自動選択のオプション ----
   document.getElementById('wandTol').addEventListener('input',e=>{ tool.selTol=+e.target.value; document.getElementById('wandTolVal').textContent=e.target.value; });
+  document.getElementById('wandMode').addEventListener('change',e=>{ tool.wandAdd=(e.target.value==='add'); });
+  document.getElementById('fillRef').addEventListener('change',e=>{ tool.fillRef=e.target.value; });
   document.getElementById('selFill').addEventListener('click',selFill);
   document.getElementById('selClear').addEventListener('click',selClear);
   document.getElementById('selInvert').addEventListener('click',selInvert);
+  document.getElementById('selNone').addEventListener('click',()=>setSelection(null,true));
 
   // 'input' fires continuously while dragging the picker -> live update but DON'T touch recents (prevents flicker/shifting)
   document.getElementById('colorPicker').addEventListener('input',e=>setColor(e.target.value,false));
@@ -1557,6 +1611,9 @@
     recordEvent({t:'bgfill',lid:base.id,color:'#ffffff'});   // 初期の白背景を再生でも再現できるよう記録
     buildBasicPalette(); renderRecent(); renderMyPalette(); buildSizePresets(); buildRzPresets();
     setColor('#3a4a54',false); renderLayerList(); redraw(); fitZoom();
+    document.getElementById('binaryToggle').classList.toggle('on', tool.binary);
+    document.getElementById('wandMode').value = tool.wandAdd?'add':'new';
+    document.getElementById('fillRef').value = tool.fillRef;
     selectTool('pen'); pushHistory(); updateUndoRedo();
   }
   init();
