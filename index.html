@@ -361,8 +361,16 @@
     </div>
 
     <div class="field" id="wandOptions" style="display:none;">
-      <div class="opt-title">自動選択</div>
+      <div class="opt-title">範囲選択</div>
       <div class="field">
+        <div class="field-row"><label>選択方法</label></div>
+        <select class="layer-mode" id="selMethod">
+          <option value="wand">自動選択(色でクリック)</option>
+          <option value="rect">四角(対角にドラッグ)</option>
+          <option value="lasso">投げ縄(囲むようにドラッグ)</option>
+        </select>
+      </div>
+      <div class="field" id="wandTolField">
         <div class="field-row"><label>許容差</label><span class="val" id="wandTolVal">32</span></div>
         <input type="range" id="wandTol" min="0" max="128" value="32">
       </div>
@@ -377,7 +385,7 @@
       <button class="head-btn" id="selClear" style="width:100%;justify-content:center;">選択範囲を消す</button>
       <button class="head-btn" id="selInvert" style="width:100%;justify-content:center;">選択を反転</button>
       <button class="head-btn" id="selNone" style="width:100%;justify-content:center;">選択を解除</button>
-      <div class="layer-hint" style="padding:0;">キャンバスをクリックすると、近い色の範囲を選択します。塗り/消しは今のレイヤーに適用されます。</div>
+      <div class="layer-hint" style="padding:0;" id="wandHint">クリックで近い色の範囲を選択します。塗り/消しは今のレイヤーに適用されます。</div>
     </div>
 
     <div class="field" id="fillOptions" style="display:none;">
@@ -540,8 +548,9 @@
   const history = []; let histIndex = -1;
   const tool = { name:'pen', color:'#3a4a54', size:8, opacity:1, smooth:3, shape:'round', angle:45, binary:true,
     text:{ font:'sans-serif', size:36, bold:false, layout:'straight', pathType:'freehand', radius:120, startDeg:-90, dir:1, side:'out' },
-    selTol:32, fillRef:'composite', wandAdd:false };
+    selTol:32, fillRef:'composite', wandAdd:false, selMode:'wand' };
   let selection = null;   // { mask:Uint8Array(CW*CH), edges:[[x,y]...] }
+  let selDrag = null;     // 四角/投げ縄でドラッグ中の情報
   let textPath = null;    // 確定/作成中の文字パスの点列 [x,y,x,y,...]
   let pathDragging = false; // フリーハンドでパスをなぞっている最中
   let pendingText = null;  // 文字入力中の配置情報 { layout, x, y, pts }
@@ -734,10 +743,10 @@
       moving={lid:l.id, snap, sx:p.x, sy:p.y, dx:0, dy:0};
       input.setPointerCapture&&input.setPointerCapture(e.pointerId); return; }
     if(tool.name==='eyedropper'){ pickColor(p); return; }
-    if(tool.name==='wand'){ const sel=buildMask(composite, Math.floor(p.x), Math.floor(p.y), tool.selTol);
-      if(!sel){ toast('選択できませんでした'); return; }
-      if(tool.wandAdd && selection){ const m=selection.mask, nm=sel.mask, u=new Uint8Array(m.length); for(let i=0;i<m.length;i++)u[i]=(m[i]||nm[i])?1:0; setSelection(maskToSelection(u), true); toast('選択に追加しました'); }
-      else { setSelection(sel, true); toast('範囲を選択しました'); }
+    if(tool.name==='wand'){
+      if(tool.selMode==='wand'){ const sel=buildMask(composite, Math.floor(p.x), Math.floor(p.y), tool.selTol);
+        if(!sel){ toast('選択できませんでした'); return; } applySelection(sel); }
+      else { selDrag={ mode:tool.selMode, sx:p.x, sy:p.y, cx:p.x, cy:p.y, pts:[p.x,p.y] }; input.setPointerCapture&&input.setPointerCapture(e.pointerId); }
       return; }
     if(tool.name==='text'){
       if(pendingText) return;                       // 入力中はキャンバス操作を無視
@@ -781,6 +790,10 @@
   function pointerMove(e){
     if(panning){ stage.scrollLeft=scrollStart.x-(e.clientX-panStart.x); stage.scrollTop=scrollStart.y-(e.clientY-panStart.y); scheduleNav(); return; }
     if(moving){ const q=getPos(e); moving.dx=q.x-moving.sx; moving.dy=q.y-moving.sy; previewMove(); return; }
+    if(selDrag){ const q=getPos(e);
+      if(selDrag.mode==='rect'){ selDrag.cx=q.x; selDrag.cy=q.y; }
+      else { const lx=selDrag.pts[selDrag.pts.length-2], ly=selDrag.pts[selDrag.pts.length-1]; if(Math.hypot(q.x-lx,q.y-ly)>=3) selDrag.pts.push(q.x,q.y); }
+      drawSelDragPreview(); return; }
     if(pendingText) return;   // 文字入力中はマウス移動でプレビューを消さない
     if(pathDragging){ const q=getPos(e); const lx=textPath[textPath.length-2], ly=textPath[textPath.length-1];
       if(Math.hypot(q.x-lx,q.y-ly)>=4){ textPath.push(q.x,q.y); drawPathGuide(); } return; }
@@ -1420,8 +1433,17 @@
   function resizeAll(){ layers.forEach(l=>{ const c=document.createElement('canvas'); c.width=CW; c.height=CH; c.getContext('2d').drawImage(l.canvas,0,0); l.canvas=c; l.ctx=c.getContext('2d'); }); setCanvasSize(); }
 
   // ---------- tool select ----------
+  // 塗りつぶし/自動選択/スポイト用の、対象点をピンポイントで示す十字カーソル(白フチ+黒+中心ドット、ホットスポットは中心)
+  const CROSSHAIR = 'url("data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><g fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><line x1="12" y1="2" x2="12" y2="9"/><line x1="12" y1="15" x2="12" y2="22"/><line x1="2" y1="12" x2="9" y2="12"/><line x1="15" y1="12" x2="22" y2="12"/></g><g fill="none" stroke="#111" stroke-width="1.3" stroke-linecap="round"><line x1="12" y1="2" x2="12" y2="9"/><line x1="12" y1="15" x2="12" y2="22"/><line x1="2" y1="12" x2="9" y2="12"/><line x1="15" y1="12" x2="22" y2="12"/></g><circle cx="12" cy="12" r="1.7" fill="#111" stroke="#fff" stroke-width="1"/></svg>')+'") 12 12, crosshair';
+  function toolCursor(name){
+    if(isDrawTool(name)) return 'none';
+    if(name==='move') return 'move';
+    if(name==='text') return 'text';
+    if(name==='fill'||name==='wand'||name==='eyedropper') return CROSSHAIR;
+    return 'default';
+  }
   function selectTool(name){ tool.name=name; document.querySelectorAll('.tool').forEach(t=>t.classList.toggle('active',t.dataset.tool===name));
-    input.style.cursor = isDrawTool(name) ? 'none' : (name==='move'?'move':(name==='text'?'text':'copy')); curctx.clearRect(0,0,CW,CH);
+    input.style.cursor = toolCursor(name); curctx.clearRect(0,0,CW,CH);
     // ツール別オプションの表示切替
     document.getElementById('textOptions').style.display = (name==='text')?'flex':'none';
     document.getElementById('wandOptions').style.display = (name==='wand')?'flex':'none';
@@ -1598,7 +1620,7 @@
       if(map[e.key.toLowerCase()])selectTool(map[e.key.toLowerCase()]);
       if(e.key==='['){ setSize(tool.size-2); }
       if(e.key===']'){ setSize(tool.size+2); } } });
-  window.addEventListener('keyup',e=>{ if(e.code==='Space'){ spaceDown=false; input.style.cursor=isDrawTool(tool.name)?'none':(tool.name==='move'?'move':'copy'); } });
+  window.addEventListener('keyup',e=>{ if(e.code==='Space'){ spaceDown=false; input.style.cursor=toolCursor(tool.name); } });
   window.addEventListener('mousedown',e=>{ /* keep space pan flag correct */ });
 
   // ---------- init ----------
