@@ -266,6 +266,9 @@
     <button class="tool" data-tool="fill" title="ぬりつぶし (G)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 11l-8-8-8.5 8.5a1.4 1.4 0 0 0 0 2L9 20a1.4 1.4 0 0 0 2 0l8-8z"/><path d="M5 13h14"/><path d="M21 16s-2 2.3-2 3.5A2 2 0 0 0 23 19.5C23 18.3 21 16 21 16z"/></svg><span>ぬりつぶし</span>
     </button>
+    <button class="tool" data-tool="gradient" title="グラデーション (ドラッグで方向)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 20L21 4" opacity="0"/><defs></defs><path d="M6 8h.01M9 8h.01M6 11h.01M9 11h2M6 14h6M6 17h9M13 8h5M15 11h3M17 14h2"/></svg><span>グラデ</span>
+    </button>
     <button class="tool" data-tool="eyedropper" title="スポイト (I)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/><path d="M13 6l5 5"/><path d="M8 16l-5 5"/></svg><span>スポイト</span>
     </button>
@@ -397,7 +400,70 @@
           <option value="layer">現在のレイヤーだけ</option>
         </select>
       </div>
-      <div class="layer-hint" style="padding:0;">「統合画像」は別レイヤーの線も境界にします。色は今のレイヤーに塗られます。</div>
+      <div class="field">
+        <div class="field-row"><label>塗り(トーン)</label></div>
+        <select class="layer-mode" id="fillPattern">
+          <option value="solid">ベタ(単色)</option>
+          <option value="dot">網点(ドット)</option>
+          <option value="hline">横線</option>
+          <option value="vline">縦線</option>
+          <option value="cross">格子(クロス)</option>
+        </select>
+      </div>
+      <div class="field" id="fillScaleField" style="display:none;">
+        <div class="field-row"><label>パターンの大きさ</label><span class="val" id="fillScaleVal">12 px</span></div>
+        <input type="range" id="fillScale" min="4" max="40" value="12">
+      </div>
+      <div class="layer-hint" style="padding:0;">「統合画像」は別レイヤーの線も境界にします。トーンは現在の色で塗られます。</div>
+    </div>
+
+    <div class="field" id="gradOptions" style="display:none;">
+      <div class="opt-title">グラデーション</div>
+      <div class="field">
+        <div class="field-row"><label>形状</label></div>
+        <select class="layer-mode" id="gradShape">
+          <option value="linear">直線</option>
+          <option value="radial">円形</option>
+        </select>
+      </div>
+      <div class="field">
+        <div class="field-row"><label>スタイル</label></div>
+        <select class="layer-mode" id="gradStyle">
+          <option value="smooth">なめらか</option>
+          <option value="halftone">ハーフトーン(散らし)</option>
+        </select>
+      </div>
+      <div class="field" id="gradEndField">
+        <div class="field-row"><label>終点</label></div>
+        <select class="layer-mode" id="gradEnd">
+          <option value="transparent">透明にする</option>
+          <option value="color2">2色目へ</option>
+        </select>
+      </div>
+      <div class="field" id="gradColor2Field" style="display:none;">
+        <div class="field-row"><label>2色目</label></div>
+        <input type="color" id="gradColor2" value="#ffffff" style="width:100%;height:26px;border:1px solid var(--line-strong);border-radius:6px;background:var(--panel);cursor:pointer;">
+      </div>
+      <div class="field" id="gradHtModeField" style="display:none;">
+        <div class="field-row"><label>ハーフトーン</label></div>
+        <select class="layer-mode" id="gradHtMode">
+          <option value="scatter">チラシ(散らし)</option>
+          <option value="normal">通常(整列)</option>
+        </select>
+      </div>
+      <div class="field" id="gradShapeField" style="display:none;">
+        <div class="field-row"><label>形</label></div>
+        <select class="layer-mode" id="gradDotShape">
+          <option value="dot">網点(丸)</option>
+          <option value="triangle">三角</option>
+          <option value="square">四角</option>
+        </select>
+      </div>
+      <div class="field" id="gradCellField" style="display:none;">
+        <div class="field-row"><label>散らしの間隔</label><span class="val" id="gradCellVal">8 px</span></div>
+        <input type="range" id="gradCell" min="4" max="40" value="8">
+      </div>
+      <div class="layer-hint" style="padding:0;">ドラッグした向きにグラデーションします。散らしは始点側ほど形が大きく密になります。</div>
     </div>
 
     <div class="field">
@@ -548,9 +614,11 @@
   const history = []; let histIndex = -1;
   const tool = { name:'pen', color:'#3a4a54', size:8, opacity:1, smooth:3, shape:'round', angle:45, binary:true,
     text:{ font:'sans-serif', size:36, bold:false, layout:'straight', pathType:'freehand', radius:120, startDeg:-90, dir:1, side:'out' },
-    selTol:32, fillRef:'composite', wandAdd:false, selMode:'wand' };
+    selTol:32, fillRef:'composite', wandAdd:false, selMode:'wand', fillPattern:{type:'solid', scale:12},
+    grad:{shape:'linear', style:'smooth', cell:8, endType:'transparent', color2:'#ffffff', dotShape:'dot', htMode:'scatter'} };
   let selection = null;   // { mask:Uint8Array(CW*CH), edges:[[x,y]...] }
   let selDrag = null;     // 四角/投げ縄でドラッグ中の情報
+  let gradDrag = null;    // グラデーションのドラッグ情報
   let textPath = null;    // 確定/作成中の文字パスの点列 [x,y,x,y,...]
   let pathDragging = false; // フリーハンドでパスをなぞっている最中
   let pendingText = null;  // 文字入力中の配置情報 { layout, x, y, pts }
@@ -777,11 +845,6 @@
         if(!sel){ toast('選択できませんでした'); return; } applySelection(sel); }
       else { selDrag={ mode:tool.selMode, sx:p.x, sy:p.y, cx:p.x, cy:p.y, pts:[p.x,p.y] }; input.setPointerCapture&&input.setPointerCapture(e.pointerId); }
       return; }
-    if(tool.name==='wand'){
-      if(tool.selMode==='wand'){ const sel=buildMask(composite, Math.floor(p.x), Math.floor(p.y), tool.selTol);
-        if(!sel){ toast('選択できませんでした'); return; } applySelection(sel); }
-      else { selDrag={ mode:tool.selMode, sx:p.x, sy:p.y, cx:p.x, cy:p.y, pts:[p.x,p.y] }; input.setPointerCapture&&input.setPointerCapture(e.pointerId); }
-      return; }
     if(tool.name==='text'){
       if(pendingText) return;                       // 入力中はキャンバス操作を無視
       if(tool.text.layout==='path'){
@@ -799,12 +862,11 @@
     if(tool.name==='fill'){ const l=activeLayer(); if(l){ pushHistory();
       const fx=Math.floor(p.x), fy=Math.floor(p.y);
       const matchCanvas = (tool.fillRef==='composite') ? composite : l.canvas;   // 境界の参照をツールで選択
-      if(selMaskCanvas){ const t=document.createElement('canvas'); t.width=CW;t.height=CH;
-        bucketFill(matchCanvas, t.getContext('2d'), fx, fy, tool.color, tool.opacity, CW, CH);
-        l.ctx.drawImage(clipToSelection(t),0,0); }
-      else bucketFill(matchCanvas, l.ctx, fx, fy, tool.color, tool.opacity, CW, CH);
-      recordEvent({t:'fill',lid:l.id,color:tool.color,op:tool.opacity,x:fx,y:fy,fillRef:tool.fillRef});
+      applyFill(l.ctx, matchCanvas, fx, fy, tool.color, tool.opacity, CW, CH, tool.fillPattern, selMaskCanvas);
+      recordEvent({t:'fill',lid:l.id,color:tool.color,op:tool.opacity,x:fx,y:fy,fillRef:tool.fillRef,pattern:tool.fillPattern});
       redraw(); updateThumb(l); } return; }
+    if(tool.name==='gradient'){ const l=activeLayer(); if(!l||!l.visible){ toast(l?'レイヤーが非表示です':'レイヤーがありません'); return; }
+      gradDrag={ x0:p.x, y0:p.y, x1:p.x, y1:p.y }; input.setPointerCapture&&input.setPointerCapture(e.pointerId); return; }
 
     const l=activeLayer(); if(!l||!l.visible){ toast(l?'レイヤーが非表示です':'レイヤーがありません'); return; }
     drawing=true; input.setPointerCapture&&input.setPointerCapture(e.pointerId);
@@ -828,6 +890,15 @@
       if(selDrag.mode==='rect'){ selDrag.cx=q.x; selDrag.cy=q.y; }
       else { const lx=selDrag.pts[selDrag.pts.length-2], ly=selDrag.pts[selDrag.pts.length-1]; if(Math.hypot(q.x-lx,q.y-ly)>=3) selDrag.pts.push(q.x,q.y); }
       drawSelDragPreview(); return; }
+    if(gradDrag){ const q=getPos(e); gradDrag.x1=q.x; gradDrag.y1=q.y;
+      curctx.clearRect(0,0,CW,CH); curctx.save(); curctx.lineWidth=2/zoom;
+      curctx.strokeStyle='rgba(255,255,255,.9)'; curctx.setLineDash([6/zoom,4/zoom]);
+      curctx.beginPath(); curctx.moveTo(gradDrag.x0,gradDrag.y0); curctx.lineTo(gradDrag.x1,gradDrag.y1); curctx.stroke();
+      curctx.strokeStyle='rgba(0,0,0,.8)'; curctx.beginPath(); curctx.moveTo(gradDrag.x0,gradDrag.y0); curctx.lineTo(gradDrag.x1,gradDrag.y1); curctx.stroke();
+      curctx.setLineDash([]); curctx.fillStyle='rgba(47,150,184,.95)';
+      curctx.beginPath(); curctx.arc(gradDrag.x0,gradDrag.y0,3.5/zoom,0,Math.PI*2); curctx.fill();
+      curctx.beginPath(); curctx.arc(gradDrag.x1,gradDrag.y1,3.5/zoom,0,Math.PI*2); curctx.fill();
+      curctx.restore(); return; }
     if(pendingText) return;   // 文字入力中はマウス移動でプレビューを消さない
     if(pathDragging){ const q=getPos(e); const lx=textPath[textPath.length-2], ly=textPath[textPath.length-1];
       if(Math.hypot(q.x-lx,q.y-ly)>=4){ textPath.push(q.x,q.y); drawPathGuide(); } return; }
@@ -855,6 +926,12 @@
     if(selDrag){ const d=selDrag; selDrag=null; curctx.clearRect(0,0,CW,CH);
       if(d.mode==='rect'){ if(Math.abs(d.cx-d.sx)>=2 && Math.abs(d.cy-d.sy)>=2) applySelection(rectMask(d.sx,d.sy,d.cx,d.cy)); }
       else { if(d.pts.length>=6) applySelection(polyMask(d.pts)); }
+      return; }
+    if(gradDrag){ const d=gradDrag; gradDrag=null; curctx.clearRect(0,0,CW,CH);
+      if(Math.hypot(d.x1-d.x0,d.y1-d.y0)>=3){ const l=activeLayer();
+        if(l){ const ev={t:'grad',lid:l.id,x0:d.x0,y0:d.y0,x1:d.x1,y1:d.y1,color:tool.color,op:tool.opacity,
+            shape:tool.grad.shape,style:tool.grad.style,cell:tool.grad.cell,endType:tool.grad.endType,color2:tool.grad.color2,dotShape:tool.grad.dotShape,htMode:tool.grad.htMode,seed:(Math.random()*100000)|0};
+          renderGradient(l.ctx, ev, CW, CH, selMaskCanvas); recordEvent(ev); updateThumb(l); redraw(); pushHistory(); toast('グラデーションを適用'); } }
       return; }
     if(!drawing)return; drawing=false;
     if(airTimer){ clearInterval(airTimer); airTimer=null; airPos=null; }
@@ -890,6 +967,81 @@
   function pickColor(p){ const x=Math.floor(p.x),y=Math.floor(p.y); const d=cctx.getImageData(x,y,1,1).data;
     if(d[3]===0){ toast('透明です'); return; }
     const hex='#'+[d[0],d[1],d[2]].map(v=>v.toString(16).padStart(2,'0')).join(''); setColor(hex); toast('色を取得: '+hex.toUpperCase()); }
+
+  // 連結領域(塗る範囲)をマスクとして取得
+  function floodRegionMask(matchCanvas, sx, sy, tol, w, h){
+    if(sx<0||sy<0||sx>=w||sy>=h)return null;
+    const md=matchCanvas.getContext('2d').getImageData(0,0,w,h).data;
+    const t=(sy*w+sx)*4, tr=md[t],tg=md[t+1],tb=md[t+2],ta=md[t+3];
+    const matches=p=>{const i=p*4;return Math.abs(md[i]-tr)<=tol&&Math.abs(md[i+1]-tg)<=tol&&Math.abs(md[i+2]-tb)<=tol&&Math.abs(md[i+3]-ta)<=tol;};
+    const region=new Uint8Array(w*h), stack=[[sx,sy]]; let cnt=0;
+    while(stack.length){ let [cx,cy]=stack.pop(); let p=cy*w+cx;
+      while(cy>=0&&!region[p]&&matches(p)){cy--;p-=w;} cy++;p+=w; let L=false,R=false;
+      while(cy<h&&!region[p]&&matches(p)){ region[p]=1; cnt++;
+        if(cx>0){const l=p-1;if(!region[l]&&matches(l)){if(!L){stack.push([cx-1,cy]);L=true;}}else L=false;}
+        if(cx<w-1){const r=p+1;if(!region[r]&&matches(r)){if(!R){stack.push([cx+1,cy]);R=true;}}else R=false;}
+        cy++;p+=w; } }
+    return cnt?region:null;
+  }
+  // トーンパターンのタイル(現在色)。繰り返し用の小さなcanvasを返す
+  function makeTile(type, scale, color){
+    const s=Math.max(3, scale|0); const c=document.createElement('canvas'); c.width=s; c.height=s; const x=c.getContext('2d'); x.fillStyle=color;
+    if(type==='hline'){ x.fillRect(0,0,s,Math.max(1,Math.round(s*0.5))); }
+    else if(type==='vline'){ x.fillRect(0,0,Math.max(1,Math.round(s*0.5)),s); }
+    else if(type==='cross'){ const t=Math.max(1,Math.round(s*0.4)); x.fillRect(0,0,s,t); x.fillRect(0,0,t,s); }
+    else { const r=Math.max(1,s*0.3); x.beginPath(); x.arc(s/2,s/2,r,0,Math.PI*2); x.fill(); }   // dot
+    return c;
+  }
+  // 塗りつぶし本体。pattern={type,scale}(未指定/solidでベタ)。selMaskで選択内に制限。
+  function applyFill(destCtx, matchCanvas, sx, sy, color, op, w, h, pattern, selMask){
+    const region=floodRegionMask(matchCanvas, sx, sy, 32, w, h); if(!region)return;
+    const regionCanvas=maskCanvasSized(region,w,h);
+    const paint=document.createElement('canvas'); paint.width=w; paint.height=h; const px=paint.getContext('2d');
+    px.globalAlpha=(op!=null?op:1);
+    if(pattern && pattern.type && pattern.type!=='solid'){ px.fillStyle=px.createPattern(makeTile(pattern.type, pattern.scale||12, color),'repeat'); px.fillRect(0,0,w,h); }
+    else { px.fillStyle=color; px.fillRect(0,0,w,h); }
+    px.globalAlpha=1; px.globalCompositeOperation='destination-in'; px.drawImage(regionCanvas,0,0);
+    if(selMask) px.drawImage(selMask,0,0);   // 選択内に制限
+    destCtx.drawImage(paint,0,0);
+  }
+
+  function hexToRgba(hex,a){ const [r,g,b]=hexToRgb(hex); return 'rgba('+r+','+g+','+b+','+a+')'; }
+  function drawGradShape(px, cx, cy, r, shape, rot){
+    if(shape==='dot'||!shape){ px.beginPath(); px.arc(cx,cy,r,0,Math.PI*2); px.fill(); return; }
+    px.save(); px.translate(cx,cy); px.rotate(rot||0); px.beginPath();
+    if(shape==='square'){ px.rect(-r,-r,2*r,2*r); }
+    else { px.moveTo(0,-r); px.lineTo(r*0.866, r*0.5); px.lineTo(-r*0.866, r*0.5); px.closePath(); }
+    px.fill(); px.restore();
+  }
+  // グラデーション描画(なめらか:色→透明/2色, ハーフトーン散らし:網点/三角/四角)。selMaskで選択内に制限。
+  function renderGradient(destCtx, ev, w, h, selMask){
+    const paint=document.createElement('canvas'); paint.width=w; paint.height=h; const px=paint.getContext('2d');
+    px.globalAlpha=(ev.op!=null?ev.op:1);
+    const len=Math.hypot(ev.x1-ev.x0, ev.y1-ev.y0)||1;
+    if(ev.style==='halftone'){
+      px.fillStyle=ev.color; const cell=Math.max(3, ev.cell||8);
+      const ux=(ev.x1-ev.x0)/len, uy=(ev.y1-ev.y0)/len; const dotShape=ev.dotShape||'dot'; const scatter=(ev.htMode!=='normal');
+      let seed=(ev.seed||1)>>>0; const rnd=()=>{ seed=(seed*9301+49297)%233280; return seed/233280; };
+      for(let cy=cell/2; cy<h; cy+=cell){ for(let cx=cell/2; cx<w; cx+=cell){
+        let t = (ev.shape==='radial') ? Math.hypot(cx-ev.x0,cy-ev.y0)/len : ((cx-ev.x0)*ux+(cy-ev.y0)*uy)/len;
+        t=Math.max(0,Math.min(1,t)); const c=1-t;
+        let jx=0,jy=0,rot=0;
+        if(scatter){ jx=(rnd()-0.5)*cell*0.6; jy=(rnd()-0.5)*cell*0.6; rot=rnd()*Math.PI*2; }   // チラシ: 乱数でゆらぎ・回転
+        if(c<=0.02)continue;
+        const r=(cell*0.5)*(0.35+1.35*c);   // 始点側ほど大きく(重なって密に)
+        drawGradShape(px, cx+jx, cy+jy, Math.min(r, cell*1.1), dotShape, rot);
+      }}
+    } else {
+      let g; if(ev.shape==='radial') g=px.createRadialGradient(ev.x0,ev.y0,0, ev.x0,ev.y0,len);
+      else g=px.createLinearGradient(ev.x0,ev.y0,ev.x1,ev.y1);
+      g.addColorStop(0, ev.color);
+      g.addColorStop(1, (ev.endType==='color2') ? (ev.color2||'#ffffff') : hexToRgba(ev.color,0));
+      px.fillStyle=g; px.fillRect(0,0,w,h);
+    }
+    px.globalAlpha=1;
+    if(selMask){ px.globalCompositeOperation='destination-in'; px.drawImage(selMask,0,0); }
+    destCtx.drawImage(paint,0,0);
+  }
 
   // bucket fill. matchCanvas = 境界判定に使う画像(参照), destCtx = 実際に塗る先.
   // 参照レイヤーが無いときは matchCanvas===描画先レイヤー を渡せば従来どおり。
@@ -1342,8 +1494,7 @@
         let match=l.canvas;
         if(ev.fillRef==='composite') match=mergeVisible(play.layers,play.pw,play.ph);
         else if(ev.refIds&&ev.refIds.length){ const refs=ev.refIds.map(id=>playLayer(id)).filter(Boolean); if(refs.length) match=buildRefCanvas(refs,play.pw,play.ph); }
-        if(play.sel){ const t=document.createElement('canvas'); t.width=play.pw;t.height=play.ph; bucketFill(match,t.getContext('2d'),ev.x,ev.y,ev.color,ev.op,play.pw,play.ph); l.ctx.drawImage(playClip(t),0,0); }
-        else bucketFill(match,l.ctx,ev.x,ev.y,ev.color,ev.op,play.pw,play.ph);
+        applyFill(l.ctx, match, ev.x, ev.y, ev.color, ev.op, play.pw, play.ph, ev.pattern, play.sel);
       } }
     else if(ev.t==='bgfill'){ endActiveStroke(); const l=playLayer(ev.lid); if(l){ l.ctx.save(); if(ev.mode==='under')l.ctx.globalCompositeOperation='destination-over'; l.ctx.fillStyle=ev.color||'#ffffff'; l.ctx.fillRect(0,0,play.pw,play.ph); l.ctx.restore(); } }
     else if(ev.t==='clear'){ endActiveStroke(); const l=playLayer(ev.lid); if(l)l.ctx.clearRect(0,0,play.pw,play.ph); }
@@ -1356,6 +1507,7 @@
         } else { const t=document.createElement('canvas'); t.width=play.pw; t.height=play.ph; t.getContext('2d').drawImage(l.canvas,0,0); l.ctx.clearRect(0,0,play.pw,play.ph); l.ctx.drawImage(t,ev.dx,ev.dy); }
       } }
     else if(ev.t==='text'){ endActiveStroke(); const l=playLayer(ev.lid); if(l) drawTextOnto(l.ctx, ev); }
+    else if(ev.t==='grad'){ endActiveStroke(); const l=playLayer(ev.lid); if(l) renderGradient(l.ctx, ev, play.pw, play.ph, play.sel); }
     else if(ev.t==='maskfill'){ endActiveStroke(); const l=playLayer(ev.lid); if(l&&ev.rle){ const mc=maskCanvasOf(decodeRLE(ev.rle)); const t=document.createElement('canvas'); t.width=play.pw;t.height=play.ph; const tx=t.getContext('2d'); tx.fillStyle=ev.color; tx.globalAlpha=(ev.op!=null?ev.op:1); tx.fillRect(0,0,play.pw,play.ph); tx.globalAlpha=1; tx.globalCompositeOperation='destination-in'; tx.drawImage(mc,0,0); l.ctx.drawImage(t,0,0); } }
     else if(ev.t==='maskclear'){ endActiveStroke(); const l=playLayer(ev.lid); if(l&&ev.rle){ const mc=maskCanvasOf(decodeRLE(ev.rle)); l.ctx.save(); l.ctx.globalCompositeOperation='destination-out'; l.ctx.drawImage(mc,0,0); l.ctx.restore(); } }
     else if(ev.t==='st'){
@@ -1471,8 +1623,7 @@
       else if(ev.t==='fill'){ let match=l.canvas;
         if(ev.fillRef==='composite') match=mergeVisible(layers,CW,CH);
         else if(ev.refIds&&ev.refIds.length){ const refs=ev.refIds.map(id=>layers.find(x=>x.id===id)).filter(Boolean); if(refs.length) match=buildRefCanvas(refs,CW,CH); }
-        if(curSel){ const t=document.createElement('canvas'); t.width=CW;t.height=CH; bucketFill(match,t.getContext('2d'),ev.x,ev.y,ev.color,ev.op,CW,CH); l.ctx.drawImage(clipSrc(t),0,0); }
-        else bucketFill(match,l.ctx,ev.x,ev.y,ev.color,ev.op,CW,CH); }
+        applyFill(l.ctx, match, ev.x, ev.y, ev.color, ev.op, CW, CH, ev.pattern, curSel); }
       else if(ev.t==='clear'){ l.ctx.clearRect(0,0,CW,CH); }
       else if(ev.t==='move'){ const cur=document.createElement('canvas'); cur.width=CW; cur.height=CH; cur.getContext('2d').drawImage(l.canvas,0,0);
         if(ev.rle){ const mc=maskCanvasSized(decodeRLE(ev.rle),CW,CH);
@@ -1481,6 +1632,7 @@
           l.ctx.clearRect(0,0,CW,CH); l.ctx.drawImage(st,0,0); l.ctx.drawImage(mv,ev.dx,ev.dy);
         } else { l.ctx.clearRect(0,0,CW,CH); l.ctx.drawImage(cur,ev.dx,ev.dy); } }
       else if(ev.t==='text'){ drawTextOnto(l.ctx, ev); }
+      else if(ev.t==='grad'){ renderGradient(l.ctx, ev, CW, CH, curSel); }
       else if(ev.t==='maskfill'){ if(ev.rle){ const mc=maskCanvasOf(decodeRLE(ev.rle)); const t=document.createElement('canvas'); t.width=CW;t.height=CH; const tx=t.getContext('2d'); tx.fillStyle=ev.color; tx.globalAlpha=(ev.op!=null?ev.op:1); tx.fillRect(0,0,CW,CH); tx.globalAlpha=1; tx.globalCompositeOperation='destination-in'; tx.drawImage(mc,0,0); l.ctx.drawImage(t,0,0); } }
       else if(ev.t==='maskclear'){ if(ev.rle){ const mc=maskCanvasOf(decodeRLE(ev.rle)); l.ctx.save(); l.ctx.globalCompositeOperation='destination-out'; l.ctx.drawImage(mc,0,0); l.ctx.restore(); } }
       else if(ev.t==='st'){ stc.clearRect(0,0,CW,CH); stc.strokeStyle=ev.color; stc.fillStyle=ev.color; const n=ev.pts.length/2;
@@ -1518,7 +1670,7 @@
     if(isDrawTool(name)) return 'none';
     if(name==='move') return 'move';
     if(name==='text') return 'text';
-    if(name==='fill'||name==='wand'||name==='eyedropper') return CROSSHAIR;
+    if(name==='fill'||name==='wand'||name==='eyedropper'||name==='gradient') return CROSSHAIR;
     return 'default';
   }
   function selectTool(name){ tool.name=name; document.querySelectorAll('.tool').forEach(t=>t.classList.toggle('active',t.dataset.tool===name));
@@ -1527,8 +1679,10 @@
     document.getElementById('textOptions').style.display = (name==='text')?'flex':'none';
     document.getElementById('wandOptions').style.display = (name==='wand')?'flex':'none';
     document.getElementById('fillOptions').style.display = (name==='fill')?'flex':'none';
+    document.getElementById('gradOptions').style.display = (name==='gradient')?'flex':'none';
     if(name==='wand'){ document.getElementById('wandTolField').style.display=(tool.selMode==='wand')?'flex':'none'; }
     else { selDrag=null; }
+    if(name!=='gradient') gradDrag=null;
     if(name==='text'){ updateTextSubOpts(); } else { cancelText(); cancelTextPath(); }
   }
 
@@ -1563,6 +1717,22 @@
   function updateSelMethodUI(){ document.getElementById('wandTolField').style.display=(tool.selMode==='wand')?'flex':'none'; input.style.cursor=toolCursor('wand'); if(tool.name==='wand')curctx.clearRect(0,0,CW,CH); }
   document.getElementById('selMethod').addEventListener('change',e=>{ tool.selMode=e.target.value; selDrag=null; updateSelMethodUI(); });
   document.getElementById('fillRef').addEventListener('change',e=>{ tool.fillRef=e.target.value; });
+  function updateFillScaleUI(){ document.getElementById('fillScaleField').style.display=(tool.fillPattern.type==='solid')?'none':'flex'; }
+  document.getElementById('fillPattern').addEventListener('change',e=>{ tool.fillPattern.type=e.target.value; updateFillScaleUI(); });
+  document.getElementById('fillScale').addEventListener('input',e=>{ tool.fillPattern.scale=+e.target.value; document.getElementById('fillScaleVal').textContent=e.target.value+' px'; });
+  function updateGradUI(){ const halftone=(tool.grad.style==='halftone');
+    document.getElementById('gradCellField').style.display=halftone?'flex':'none';
+    document.getElementById('gradShapeField').style.display=halftone?'flex':'none';
+    document.getElementById('gradHtModeField').style.display=halftone?'flex':'none';
+    document.getElementById('gradEndField').style.display=halftone?'none':'flex';
+    document.getElementById('gradColor2Field').style.display=(!halftone && tool.grad.endType==='color2')?'flex':'none'; }
+  document.getElementById('gradShape').addEventListener('change',e=>{ tool.grad.shape=e.target.value; });
+  document.getElementById('gradStyle').addEventListener('change',e=>{ tool.grad.style=e.target.value; updateGradUI(); });
+  document.getElementById('gradCell').addEventListener('input',e=>{ tool.grad.cell=+e.target.value; document.getElementById('gradCellVal').textContent=e.target.value+' px'; });
+  document.getElementById('gradEnd').addEventListener('change',e=>{ tool.grad.endType=e.target.value; updateGradUI(); });
+  document.getElementById('gradColor2').addEventListener('input',e=>{ tool.grad.color2=e.target.value; });
+  document.getElementById('gradDotShape').addEventListener('change',e=>{ tool.grad.dotShape=e.target.value; });
+  document.getElementById('gradHtMode').addEventListener('change',e=>{ tool.grad.htMode=e.target.value; });
   document.getElementById('selFill').addEventListener('click',selFill);
   document.getElementById('selClear').addEventListener('click',selClear);
   document.getElementById('selInvert').addEventListener('click',selInvert);
@@ -1721,6 +1891,17 @@
     document.getElementById('selMethod').value = tool.selMode;
     document.getElementById('wandTolField').style.display = (tool.selMode==='wand')?'flex':'none';
     document.getElementById('fillRef').value = tool.fillRef;
+    document.getElementById('fillPattern').value = tool.fillPattern.type;
+    document.getElementById('fillScale').value = tool.fillPattern.scale;
+    document.getElementById('fillScaleField').style.display = (tool.fillPattern.type==='solid')?'none':'flex';
+    document.getElementById('gradShape').value = tool.grad.shape;
+    document.getElementById('gradStyle').value = tool.grad.style;
+    document.getElementById('gradCell').value = tool.grad.cell;
+    document.getElementById('gradEnd').value = tool.grad.endType;
+    document.getElementById('gradColor2').value = tool.grad.color2;
+    document.getElementById('gradDotShape').value = tool.grad.dotShape;
+    document.getElementById('gradHtMode').value = tool.grad.htMode;
+    updateGradUI();
     selectTool('pen'); pushHistory(); updateUndoRedo();
   }
   init();
