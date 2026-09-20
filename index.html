@@ -325,6 +325,8 @@
           <option value="'Hiragino Maru Gothic ProN', sans-serif">丸ゴシック</option>
           <option value="'Courier New', monospace">等幅</option>
         </select>
+        <input type="text" class="hex" id="txtFontCustom" placeholder="フォント名を直接入力(例: 游明朝)" style="text-transform:none;text-align:left;margin-top:6px;padding:0 6px;">
+        <button class="head-btn" id="txtFontLoad" style="width:100%;justify-content:center;margin-top:6px;">PCのフォント一覧から選ぶ</button>
       </div>
       <div class="field">
         <div class="field-row"><label>文字サイズ</label><span class="val" id="txtSizeVal">36 px</span></div>
@@ -447,8 +449,8 @@
       <div class="field" id="gradHtModeField" style="display:none;">
         <div class="field-row"><label>ハーフトーン</label></div>
         <select class="layer-mode" id="gradHtMode">
-          <option value="scatter">チラシ(散らし)</option>
           <option value="normal">通常(整列)</option>
+          <option value="scatter">チラシ(散らし)</option>
         </select>
       </div>
       <div class="field" id="gradShapeField" style="display:none;">
@@ -615,7 +617,7 @@
   const tool = { name:'pen', color:'#3a4a54', size:8, opacity:1, smooth:3, shape:'round', angle:45, binary:true,
     text:{ font:'sans-serif', size:36, bold:false, layout:'straight', pathType:'freehand', radius:120, startDeg:-90, dir:1, side:'out' },
     selTol:32, fillRef:'composite', wandAdd:false, selMode:'wand', fillPattern:{type:'solid', scale:12},
-    grad:{shape:'linear', style:'smooth', cell:8, endType:'transparent', color2:'#ffffff', dotShape:'dot', htMode:'scatter'} };
+    grad:{shape:'linear', style:'smooth', cell:8, endType:'transparent', color2:'#ffffff', dotShape:'dot', htMode:'normal'} };
   let selection = null;   // { mask:Uint8Array(CW*CH), edges:[[x,y]...] }
   let selDrag = null;     // 四角/投げ縄でドラッグ中の情報
   let gradDrag = null;    // グラデーションのドラッグ情報
@@ -694,7 +696,8 @@
     if(idx===-1)layers.push(l); else layers.splice(idx+1,0,l); activeId=l.id; renderLayerList(); redraw(); return l; }
 
   function redraw(){ cctx.clearRect(0,0,CW,CH);
-    for(const l of layers){ if(!l.visible||l.opacity<=0)continue; cctx.globalAlpha=l.opacity; cctx.globalCompositeOperation=l.mode; cctx.drawImage(l.canvas,0,0); }
+    for(const l of layers){ if(!l.visible||l.opacity<=0)continue; cctx.globalAlpha=l.opacity; cctx.globalCompositeOperation=l.mode; cctx.drawImage(l.canvas,0,0);
+      if(moveSess && moveSess.lid===l.id) cctx.drawImage(moveSess.content, moveSess.dx, moveSess.dy); }
     cctx.globalAlpha=1; cctx.globalCompositeOperation='source-over'; scheduleNav(); }
 
   // live preview: composite with the wet stroke folded into the active layer at tool opacity + layer mode
@@ -718,55 +721,41 @@
     }
     cctx.globalAlpha=1; cctx.globalCompositeOperation='source-over'; scheduleNav();
   }
-
-  // preview while dragging the active layer's pixels with the move tool
-  function previewMove(){
-    cctx.clearRect(0,0,CW,CH);
-    for(const l of layers){
-      if(!l.visible||l.opacity<=0)continue;
-      cctx.globalAlpha=l.opacity; cctx.globalCompositeOperation=l.mode;
-      if(moving && l.id===moving.lid){
-        if(moving.movePart){ cctx.drawImage(moving.staticPart,0,0); cctx.drawImage(moving.movePart, moving.dx, moving.dy); }
-        else cctx.drawImage(moving.snap, moving.dx, moving.dy);
-      }
-      else cctx.drawImage(l.canvas,0,0);
-    }
-    cctx.globalAlpha=1; cctx.globalCompositeOperation='source-over'; scheduleNav();
-  }
   function shiftMask(mask,dx,dy){ const nm=new Uint8Array(CW*CH); dx=Math.round(dx); dy=Math.round(dy);
     for(let y=0;y<CH;y++){ const ny=y+dy; if(ny<0||ny>=CH)continue; const row=y*CW, nrow=ny*CW;
       for(let x=0;x<CW;x++){ if(!mask[row+x])continue; const nx=x+dx; if(nx<0||nx>=CW)continue; nm[nrow+nx]=1; } }
     return nm; }
   function pointInSelection(p){ if(!selection)return false; const x=Math.floor(p.x),y=Math.floor(p.y); if(x<0||y<0||x>=CW||y>=CH)return false; return selection.mask[y*CW+x]===1; }
+  // 移動はフロートセッション: 確定するまで元の内容(はみ出し分も)を保持 → 画面外に出しても戻せば復活
   function beginLayerMove(l,p,e){
-    const snap=document.createElement('canvas'); snap.width=CW; snap.height=CH; snap.getContext('2d').drawImage(l.canvas,0,0);
-    let movePart=null, staticPart=null, selMaskAtMove=null;
-    if(selection && selMaskCanvas){   // 選択中は選択部だけ動かす
-      selMaskAtMove=selection.mask.slice();
-      movePart=document.createElement('canvas'); movePart.width=CW; movePart.height=CH;
-      { const mx=movePart.getContext('2d'); mx.drawImage(snap,0,0); mx.globalCompositeOperation='destination-in'; mx.drawImage(selMaskCanvas,0,0); }
-      staticPart=document.createElement('canvas'); staticPart.width=CW; staticPart.height=CH;
-      { const sx=staticPart.getContext('2d'); sx.drawImage(snap,0,0); sx.globalCompositeOperation='destination-out'; sx.drawImage(selMaskCanvas,0,0); }
-    }
-    moving={lid:l.id, snap, movePart, staticPart, selMaskAtMove, sx:p.x, sy:p.y, dx:0, dy:0};
-    input.setPointerCapture&&input.setPointerCapture(e.pointerId);
+    if(moveSess && moveSess.lid===l.id){ moving={sx:p.x,sy:p.y,baseDx:moveSess.dx,baseDy:moveSess.dy}; input.setPointerCapture&&input.setPointerCapture(e.pointerId); return; }
+    endMoveSession();
+    const orig=document.createElement('canvas'); orig.width=CW; orig.height=CH; orig.getContext('2d').drawImage(l.canvas,0,0);
+    const staticBase=document.createElement('canvas'); staticBase.width=CW; staticBase.height=CH; let content, mask=null;
+    if(selection && selMaskCanvas){
+      mask=selection.mask.slice();
+      content=document.createElement('canvas'); content.width=CW; content.height=CH;
+      { const c=content.getContext('2d'); c.drawImage(orig,0,0); c.globalCompositeOperation='destination-in'; c.drawImage(selMaskCanvas,0,0); }
+      { const c=staticBase.getContext('2d'); c.drawImage(orig,0,0); c.globalCompositeOperation='destination-out'; c.drawImage(selMaskCanvas,0,0); }
+    } else { content=orig; }
+    moveSess={ lid:l.id, content, staticBase, mask, dx:0, dy:0 };
+    l.ctx.clearRect(0,0,CW,CH); l.ctx.drawImage(staticBase,0,0);   // フロートをレイヤーから外す
+    moving={sx:p.x,sy:p.y,baseDx:0,baseDy:0};
+    input.setPointerCapture&&input.setPointerCapture(e.pointerId); redraw();
   }
-  function commitMove(){
-    const l=layers.find(x=>x.id===moving.lid);
-    const dx=Math.round(moving.dx), dy=Math.round(moving.dy);
-    if(l && (dx!==0 || dy!==0)){
-      if(moving.movePart){   // 選択部だけを移動、残りは据え置き
-        l.ctx.clearRect(0,0,CW,CH); l.ctx.drawImage(moving.staticPart,0,0); l.ctx.drawImage(moving.movePart,dx,dy); updateThumb(l);
-        recordEvent({t:'move',lid:l.id,dx,dy,rle:encodeRLE(moving.selMaskAtMove)});
-        const nm=shiftMask(moving.selMaskAtMove,dx,dy); moving=null;
-        setSelection(maskToSelection(nm), true);   // 選択範囲も一緒に移動(再生用に記録)
-        redraw(); pushHistory();
-      } else {
-        l.ctx.clearRect(0,0,CW,CH); l.ctx.drawImage(moving.snap,dx,dy); updateThumb(l);
-        recordEvent({t:'move',lid:l.id,dx,dy});
-        moving=null; redraw(); pushHistory();
-      }
-    } else { moving=null; redraw(); }
+  function commitMove(){ moving=null; }   // ドラッグ終了(セッションは保持)
+  // セッションを確定してレイヤーに焼き込む(他の操作の前に呼ばれる)
+  function endMoveSession(){
+    if(!moveSess) return;
+    const s=moveSess; moveSess=null; moving=null;
+    const l=layers.find(x=>x.id===s.lid);
+    const dx=Math.round(s.dx), dy=Math.round(s.dy);
+    if(l){ l.ctx.clearRect(0,0,CW,CH); l.ctx.drawImage(s.staticBase,0,0); l.ctx.drawImage(s.content,dx,dy); updateThumb(l); }
+    if(dx!==0||dy!==0){
+      recordEvent(s.mask ? {t:'move',lid:s.lid,dx,dy,rle:encodeRLE(s.mask)} : {t:'move',lid:s.lid,dx,dy});
+      if(s.mask) setSelection(maskToSelection(shiftMask(s.mask,dx,dy)), true);
+      redraw(); pushHistory();
+    } else { redraw(); }
   }
   // ---------- navigator / preview ----------
   function layoutNav(){ const NAVW=196, NAVH=170; navScale=Math.min(NAVW/CW, NAVH/CH);
@@ -822,12 +811,12 @@
   function restore(s){ layers=s.layers.map(sl=>{ const c=document.createElement('canvas'); c.width=CW; c.height=CH; const ctx=c.getContext('2d'); ctx.drawImage(sl.canvas,0,0);
     return {id:sl.id,name:sl.name,canvas:c,ctx,visible:sl.visible,opacity:sl.opacity,mode:sl.mode,ref:!!sl.ref}; }); activeId=s.activeId;
     if(!activeLayer()&&layers.length)activeId=layers[layers.length-1].id; renderLayerList(); redraw(); syncLayerControls(); }
-  function undo(){ if(histIndex>0){ histIndex--; restore(history[histIndex]); updateUndoRedo(); toast('元に戻す'); } }
-  function redo(){ if(histIndex<history.length-1){ histIndex++; restore(history[histIndex]); updateUndoRedo(); toast('やり直し'); } }
+  function undo(){ endMoveSession(); if(histIndex>0){ histIndex--; restore(history[histIndex]); updateUndoRedo(); toast('元に戻す'); } }
+  function redo(){ endMoveSession(); if(histIndex<history.length-1){ histIndex++; restore(history[histIndex]); updateUndoRedo(); toast('やり直し'); } }
   function updateUndoRedo(){ document.getElementById('undoBtn').style.opacity=histIndex>0?1:.4; document.getElementById('redoBtn').style.opacity=histIndex<history.length-1?1:.4; }
 
   // ---------- drawing ----------
-  let drawing=false, lastP=null, smoothP=null, panning=false, panStart=null, scrollStart=null, airTimer=null, airPos=null, airSeed=1, moving=null, spaceDown=false;
+  let drawing=false, lastP=null, smoothP=null, panning=false, panStart=null, scrollStart=null, airTimer=null, airPos=null, airSeed=1, moving=null, spaceDown=false, moveSess=null;
 
   function getPos(e){ const r=input.getBoundingClientRect(); return { x:(e.clientX-r.left)/zoom, y:(e.clientY-r.top)/zoom }; }
   const isDrawTool = n => ['pen','pencil','brush','airbrush','marker','eraser'].includes(n);
@@ -835,12 +824,15 @@
   function pointerDown(e){
     const p=getPos(e);
     if(e.button===1||spaceDown){ panning=true; panStart={x:e.clientX,y:e.clientY}; scrollStart={x:stage.scrollLeft,y:stage.scrollTop}; return; }
+    // 移動セッションを継続しない操作なら、まず確定
+    const willMove = (tool.name==='move') || (tool.name==='wand' && tool.selMode==='wand' && selection && selMaskCanvas && pointInSelection(p));
+    if(moveSess && !willMove) endMoveSession();
     if(tool.name==='move'){ const l=activeLayer(); if(!l||!l.visible){ toast(l?'レイヤーが非表示です':'レイヤーがありません'); return; }
       beginLayerMove(l,p,e); return; }
     if(tool.name==='eyedropper'){ pickColor(p); return; }
     if(tool.name==='wand'){
-      // 選択範囲の中をドラッグ → その選択部分を移動
-      if(selection && selMaskCanvas && pointInSelection(p)){ const l=activeLayer(); if(l&&l.visible){ beginLayerMove(l,p,e); return; } }
+      // 自動選択モードのとき、選択範囲の中をドラッグ → その選択部分を移動
+      if(tool.selMode==='wand' && selection && selMaskCanvas && pointInSelection(p)){ const l=activeLayer(); if(l&&l.visible){ beginLayerMove(l,p,e); return; } }
       if(tool.selMode==='wand'){ const sel=buildMask(composite, Math.floor(p.x), Math.floor(p.y), tool.selTol);
         if(!sel){ toast('選択できませんでした'); return; } applySelection(sel); }
       else { selDrag={ mode:tool.selMode, sx:p.x, sy:p.y, cx:p.x, cy:p.y, pts:[p.x,p.y] }; input.setPointerCapture&&input.setPointerCapture(e.pointerId); }
@@ -885,7 +877,7 @@
 
   function pointerMove(e){
     if(panning){ stage.scrollLeft=scrollStart.x-(e.clientX-panStart.x); stage.scrollTop=scrollStart.y-(e.clientY-panStart.y); scheduleNav(); return; }
-    if(moving){ const q=getPos(e); moving.dx=q.x-moving.sx; moving.dy=q.y-moving.sy; previewMove(); return; }
+    if(moving){ const q=getPos(e); if(moveSess){ moveSess.dx=moving.baseDx+(q.x-moving.sx); moveSess.dy=moving.baseDy+(q.y-moving.sy); redraw(); } return; }
     if(selDrag){ const q=getPos(e);
       if(selDrag.mode==='rect'){ selDrag.cx=q.x; selDrag.cy=q.y; }
       else { const lx=selDrag.pts[selDrag.pts.length-2], ly=selDrag.pts[selDrag.pts.length-1]; if(Math.hypot(q.x-lx,q.y-ly)>=3) selDrag.pts.push(q.x,q.y); }
@@ -924,8 +916,10 @@
     if(moving){ commitMove(); return; }
     if(pathDragging){ pathDragging=false; drawPathGuide(); if(textPath && textPath.length>=4) toast('Enterで文字入力へ / もう一度なぞると引き直し'); return; }
     if(selDrag){ const d=selDrag; selDrag=null; curctx.clearRect(0,0,CW,CH);
-      if(d.mode==='rect'){ if(Math.abs(d.cx-d.sx)>=2 && Math.abs(d.cy-d.sy)>=2) applySelection(rectMask(d.sx,d.sy,d.cx,d.cy)); }
-      else { if(d.pts.length>=6) applySelection(polyMask(d.pts)); }
+      let made=false;
+      if(d.mode==='rect'){ if(Math.abs(d.cx-d.sx)>=2 && Math.abs(d.cy-d.sy)>=2){ applySelection(rectMask(d.sx,d.sy,d.cx,d.cy)); made=true; } }
+      else { if(d.pts.length>=6){ applySelection(polyMask(d.pts)); made=true; } }
+      if(!made && !tool.wandAdd && selection){ setSelection(null,true); }   // 新規モードで空クリック→解除
       return; }
     if(gradDrag){ const d=gradDrag; gradDrag=null; curctx.clearRect(0,0,CW,CH);
       if(Math.hypot(d.x1-d.x0,d.y1-d.y0)>=3){ const l=activeLayer();
@@ -1076,7 +1070,8 @@
     cx.globalAlpha=1; cx.globalCompositeOperation='source-over'; return c; }
 
   // ---------- text rendering (shared: editor & playback) ----------
-  function applyTextFont(ctx, ev){ ctx.font=(ev.bold?'bold ':'')+ev.size+'px '+ev.font; ctx.fillStyle=ev.color; }
+  function fontFamilyCss(fam){ fam=(fam||'sans-serif').trim(); if(!/["',]/.test(fam) && /[^\x00-\x7F]|\s/.test(fam)) return '"'+fam+'"'; return fam; }
+  function applyTextFont(ctx, ev){ ctx.font=(ev.bold?'bold ':'')+ev.size+'px '+fontFamilyCss(ev.font); ctx.fillStyle=ev.color; }
   function renderTextEvent(ctx, ev){
     ctx.save();
     ctx.globalAlpha=(ev.op!=null?ev.op:1);
@@ -1281,14 +1276,14 @@
       handle.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg>';
       const vis=document.createElement('div'); vis.className='layer-vis'+(l.visible?'':' off');
       vis.innerHTML=l.visible?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg>';
-      vis.addEventListener('click',ev=>{ ev.stopPropagation(); l.visible=!l.visible; renderLayerList(); redraw(); pushHistory(); });
+      vis.addEventListener('click',ev=>{ ev.stopPropagation(); endMoveSession(); l.visible=!l.visible; renderLayerList(); redraw(); pushHistory(); });
       const thumbBox=document.createElement('div'); thumbBox.className='layer-thumb';
       const tc=document.createElement('canvas'); tc.width=40; tc.height=32; tc.getContext('2d').drawImage(l.canvas,0,0,40,32); thumbBox.appendChild(tc); l._thumb=tc;
       const name=document.createElement('div'); name.className='layer-name'; name.textContent=l.name;
       name.addEventListener('dblclick',ev=>{ ev.stopPropagation(); const inp=document.createElement('input'); inp.value=l.name; name.textContent=''; name.appendChild(inp); inp.focus(); inp.select();
         const done=()=>{ l.name=inp.value.trim()||l.name; renderLayerList(); }; inp.addEventListener('blur',done); inp.addEventListener('keydown',k=>{if(k.key==='Enter')inp.blur();}); });
       item.appendChild(handle); item.appendChild(vis); item.appendChild(thumbBox); item.appendChild(name);
-      item.addEventListener('click',()=>{ if(layerDrag && layerDrag.moved) return; activeId=l.id; renderLayerList(); syncLayerControls(); });
+      item.addEventListener('click',()=>{ if(layerDrag && layerDrag.moved) return; endMoveSession(); activeId=l.id; renderLayerList(); syncLayerControls(); });
       handle.addEventListener('pointerdown',ev=>{ ev.preventDefault(); ev.stopPropagation(); startLayerDrag(ev,l.id,item,handle); });
       list.appendChild(item);
     }
@@ -1298,6 +1293,7 @@
   // ---------- pointer-based layer reordering (works with pen / touch / mouse) ----------
   let layerDrag=null;
   function startLayerDrag(e,id,item,handle){
+    endMoveSession();
     layerDrag={ id, item, handle, startY:e.clientY, active:false, moved:false, targetId:null, below:false, pid:e.pointerId };
     try{ handle.setPointerCapture(e.pointerId); }catch(_){}
   }
@@ -1407,6 +1403,7 @@
     o.globalAlpha=1; o.globalCompositeOperation='source-over'; return out; }
 
   function save(){
+    endMoveSession();
     const out=exportCanvas();
     const payload={ v:1, w:CW, h:CH,
       layers: layers.map(l=>({id:l.id,name:l.name,opacity:l.opacity,mode:l.mode,visible:l.visible})),
@@ -1425,6 +1422,7 @@
 
   // ---------- open file ----------
   function openFile(file){
+    endMoveSession();
     const reader=new FileReader();
     reader.onload=()=>{ const buf=reader.result; const bytes=new Uint8Array(buf);
       let rec=null; try{ const json=extractTextChunk(bytes,'drawrTimelapse'); if(json)rec=JSON.parse(json); }catch(err){ console.warn(err); }
@@ -1652,6 +1650,7 @@
 
   // replay current in-editor drawing
   function replayCurrent(){
+    endMoveSession();
     const evs=currentEvents();
     if(!evs.some(e=>e.t!=='bgfill')){ toast('まだ描いていません'); return; }
     const payload={ v:1, w:CW, h:CH,
@@ -1673,7 +1672,7 @@
     if(name==='fill'||name==='wand'||name==='eyedropper'||name==='gradient') return CROSSHAIR;
     return 'default';
   }
-  function selectTool(name){ tool.name=name; document.querySelectorAll('.tool').forEach(t=>t.classList.toggle('active',t.dataset.tool===name));
+  function selectTool(name){ endMoveSession(); tool.name=name; document.querySelectorAll('.tool').forEach(t=>t.classList.toggle('active',t.dataset.tool===name));
     input.style.cursor = toolCursor(name); curctx.clearRect(0,0,CW,CH);
     // ツール別オプションの表示切替
     document.getElementById('textOptions').style.display = (name==='text')?'flex':'none';
@@ -1697,7 +1696,21 @@
   document.getElementById('txtPathType').addEventListener('change',e=>{ tool.text.pathType=e.target.value; cancelTextPath(); });
   document.getElementById('txtPathConfirm').addEventListener('click',confirmTextPath);
   document.getElementById('txtPathReset').addEventListener('click',cancelTextPath);
-  document.getElementById('txtFont').addEventListener('change',e=>{ tool.text.font=e.target.value; textPreview(); });
+  document.getElementById('txtFont').addEventListener('change',e=>{ const cf=document.getElementById('txtFontCustom').value.trim(); tool.text.font = cf || e.target.value; textPreview(); });
+  document.getElementById('txtFontCustom').addEventListener('input',e=>{ const cf=e.target.value.trim(); tool.text.font = cf || document.getElementById('txtFont').value; textPreview(); });
+  document.getElementById('txtFontLoad').addEventListener('click',async ()=>{
+    if(!window.queryLocalFonts){ toast('この環境では一覧取得に非対応。フォント名を直接入力してください'); return; }
+    try{ const fonts=await window.queryLocalFonts();
+      const fams=[...new Set(fonts.map(f=>f.family))].sort();
+      if(!fams.length){ toast('フォントが取得できませんでした'); return; }
+      const sel=document.getElementById('txtFont');
+      [...sel.querySelectorAll('optgroup[data-local]')].forEach(o=>o.remove());
+      const grp=document.createElement('optgroup'); grp.label='PCのフォント'; grp.setAttribute('data-local','1');
+      fams.forEach(f=>{ const o=document.createElement('option'); o.value=f; o.textContent=f; grp.appendChild(o); });
+      sel.appendChild(grp);
+      toast(fams.length+'個のフォントを読み込みました');
+    }catch(err){ toast('フォントの読み込みが許可されませんでした'); }
+  });
   document.getElementById('txtSize').addEventListener('input',e=>{ tool.text.size=+e.target.value; document.getElementById('txtSizeVal').textContent=e.target.value+' px'; textPreview(); });
   document.getElementById('txtBold').addEventListener('click',e=>{ tool.text.bold=!tool.text.bold; e.currentTarget.classList.toggle('on',tool.text.bold); textPreview(); });
   document.getElementById('txtRadius').addEventListener('input',e=>{ tool.text.radius=+e.target.value; document.getElementById('txtRadiusVal').textContent=e.target.value+' px'; textPreview(); });
@@ -1775,32 +1788,32 @@
   const smR=document.getElementById('smoothRange');
   smR.addEventListener('input',e=>{ tool.smooth=+e.target.value; document.getElementById('smoothVal').textContent=e.target.value; });
 
-  document.getElementById('addLayer').addEventListener('click',()=>{ addLayer(); pushHistory(); toast('レイヤーを追加'); });
-  document.getElementById('dupLayer').addEventListener('click',()=>{ const l=activeLayer(); if(!l)return; const nl=makeLayer(l.name+' コピー'); nl.ctx.drawImage(l.canvas,0,0); nl.opacity=l.opacity; nl.mode=l.mode; nl.ref=l.ref;
+  document.getElementById('addLayer').addEventListener('click',()=>{ endMoveSession(); addLayer(); pushHistory(); toast('レイヤーを追加'); });
+  document.getElementById('dupLayer').addEventListener('click',()=>{ endMoveSession(); const l=activeLayer(); if(!l)return; const nl=makeLayer(l.name+' コピー'); nl.ctx.drawImage(l.canvas,0,0); nl.opacity=l.opacity; nl.mode=l.mode; nl.ref=l.ref;
     const idx=layers.findIndex(x=>x.id===activeId); layers.splice(idx+1,0,nl); activeId=nl.id; renderLayerList(); redraw(); pushHistory(); toast('複製しました'); });
-  document.getElementById('delLayer').addEventListener('click',()=>{
+  document.getElementById('delLayer').addEventListener('click',()=>{ endMoveSession();
     if(layers.length<=1){ const l=activeLayer(); if(l){ l.ctx.clearRect(0,0,CW,CH); recordEvent({t:'clear',lid:l.id}); updateThumb(l); redraw(); pushHistory(); toast('画面をクリアしました'); } return; }
     const idx=layers.findIndex(x=>x.id===activeId); layers.splice(idx,1); activeId=(layers[idx]||layers[idx-1]||layers[0]).id; renderLayerList(); redraw(); pushHistory(); toast('レイヤーを削除'); });
-  document.getElementById('mergeLayer').addEventListener('click',()=>{ const idx=layers.findIndex(x=>x.id===activeId); if(idx<=0){ toast('下にレイヤーがありません'); return; }
+  document.getElementById('mergeLayer').addEventListener('click',()=>{ endMoveSession(); const idx=layers.findIndex(x=>x.id===activeId); if(idx<=0){ toast('下にレイヤーがありません'); return; }
     const upper=layers[idx],lower=layers[idx-1]; lower.ctx.save(); lower.ctx.globalAlpha=upper.opacity; lower.ctx.globalCompositeOperation=upper.mode; lower.ctx.drawImage(upper.canvas,0,0); lower.ctx.restore();
     // 統合で消える上レイヤーを指す過去の記録を、統合先(下レイヤー)に付け替える → 再生でストロークが消えない
     record.events.forEach(ev=>{ if(ev.lid===upper.id)ev.lid=lower.id; if(ev.refIds)ev.refIds=ev.refIds.map(id=>id===upper.id?lower.id:id); });
     layers.splice(idx,1); activeId=lower.id; renderLayerList(); redraw(); pushHistory(); toast('統合しました'); });
   document.getElementById('upLayer').addEventListener('click',()=>moveLayer(1));
   document.getElementById('downLayer').addEventListener('click',()=>moveLayer(-1));
-  function moveLayer(dir){ const idx=layers.findIndex(x=>x.id===activeId); const ni=idx+dir; if(ni<0||ni>=layers.length)return; [layers[idx],layers[ni]]=[layers[ni],layers[idx]]; renderLayerList(); redraw(); pushHistory(); }
+  function moveLayer(dir){ endMoveSession(); const idx=layers.findIndex(x=>x.id===activeId); const ni=idx+dir; if(ni<0||ni>=layers.length)return; [layers[idx],layers[ni]]=[layers[ni],layers[idx]]; renderLayerList(); redraw(); pushHistory(); }
   document.getElementById('layerOpacity').addEventListener('input',e=>{ const l=activeLayer(); if(!l)return; l.opacity=+e.target.value/100; document.getElementById('layerOpacityVal').textContent=e.target.value+'%'; redraw(); });
-  document.getElementById('layerOpacity').addEventListener('change',()=>pushHistory());
-  document.getElementById('layerMode').addEventListener('change',e=>{ const l=activeLayer(); if(!l)return; l.mode=e.target.value; redraw(); pushHistory(); });
+  document.getElementById('layerOpacity').addEventListener('change',()=>{ endMoveSession(); pushHistory(); });
+  document.getElementById('layerMode').addEventListener('change',e=>{ endMoveSession(); const l=activeLayer(); if(!l)return; l.mode=e.target.value; redraw(); pushHistory(); });
 
   document.getElementById('undoBtn').addEventListener('click',undo);
   document.getElementById('redoBtn').addEventListener('click',redo);
   document.getElementById('saveBtn').addEventListener('click',save);
   document.getElementById('openBtn').addEventListener('click',()=>document.getElementById('fileInput').click());
   document.getElementById('fileInput').addEventListener('change',e=>{ const f=e.target.files[0]; if(f)openFile(f); e.target.value=''; });
-  document.getElementById('clearBtn').addEventListener('click',()=>{ const l=activeLayer(); if(!l)return; l.ctx.clearRect(0,0,CW,CH);
+  document.getElementById('clearBtn').addEventListener('click',()=>{ endMoveSession(); const l=activeLayer(); if(!l)return; l.ctx.clearRect(0,0,CW,CH);
     recordEvent({t:'clear',lid:l.id}); updateThumb(l); redraw(); pushHistory(); toast('レイヤーをクリア'); });
-  document.getElementById('bgBtn').addEventListener('click',()=>{ const l=activeLayer(); if(!l)return; l.ctx.save(); l.ctx.globalCompositeOperation='destination-over'; l.ctx.fillStyle='#ffffff'; l.ctx.fillRect(0,0,CW,CH); l.ctx.restore();
+  document.getElementById('bgBtn').addEventListener('click',()=>{ endMoveSession(); const l=activeLayer(); if(!l)return; l.ctx.save(); l.ctx.globalCompositeOperation='destination-over'; l.ctx.fillStyle='#ffffff'; l.ctx.fillRect(0,0,CW,CH); l.ctx.restore();
     recordEvent({t:'bgfill',lid:l.id,color:'#ffffff',mode:'under'});
     updateThumb(l); redraw(); pushHistory(); toast('背景を白紙にしました'); });
   document.getElementById('replayBtn').addEventListener('click',replayCurrent);
@@ -1811,7 +1824,7 @@
       b.addEventListener('click',()=>{ document.getElementById('rzW').value=w; document.getElementById('rzH').value=h; }); box.appendChild(b); }); }
   function openResize(){ document.getElementById('rzW').value=CW; document.getElementById('rzH').value=CH; document.getElementById('resizeModal').classList.add('open'); }
   function closeResize(){ document.getElementById('resizeModal').classList.remove('open'); }
-  function applyResize(){ let w=parseInt(document.getElementById('rzW').value,10), h=parseInt(document.getElementById('rzH').value,10);
+  function applyResize(){ endMoveSession(); let w=parseInt(document.getElementById('rzW').value,10), h=parseInt(document.getElementById('rzH').value,10);
     if(!w||!h||isNaN(w)||isNaN(h)){ toast('数値を入れてください'); return; }
     CW=Math.max(32,Math.min(4000,w)); CH=Math.max(32,Math.min(4000,h));
     resizeAll(); fitZoom(); renderLayerList(); redraw(); pushHistory(); closeResize(); toast('キャンバス: '+CW+'×'+CH); }
