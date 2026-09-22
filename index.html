@@ -259,6 +259,9 @@
     <button class="tool" data-tool="marker" title="マーカー (M)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M6 16l4-11 6 2-4 11-6-2z"/><path d="M9 5l6 2"/></svg><span>マーカー</span>
     </button>
+    <button class="tool" data-tool="sparkle" title="キラキラ (K)">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c.4 3.8 2 5.4 5.8 5.8C14 8.2 12.4 9.8 12 13.6 11.6 9.8 10 8.2 6.2 7.8 10 7.4 11.6 5.8 12 2z"/><path d="M18.5 13c.2 1.9 1 2.7 2.9 2.9-1.9.2-2.7 1-2.9 2.9-.2-1.9-1-2.7-2.9-2.9 1.9-.2 2.7-1 2.9-2.9z"/></svg><span>キラキラ</span>
+    </button>
     <div class="tool-sep"></div>
     <button class="tool" data-tool="eraser" title="消しゴム (E)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20H7l-4-4a1.9 1.9 0 0 1 0-2.7l9-9a1.9 1.9 0 0 1 2.7 0l6 6a1.9 1.9 0 0 1 0 2.7L14 20"/><path d="M6 11l7 7"/></svg><span>消しゴム</span>
@@ -426,6 +429,7 @@
         <select class="layer-mode" id="gradShape">
           <option value="linear">直線</option>
           <option value="radial">円形</option>
+          <option value="box">四角</option>
         </select>
       </div>
       <div class="field">
@@ -445,6 +449,10 @@
       <div class="field" id="gradColor2Field" style="display:none;">
         <div class="field-row"><label>2色目</label></div>
         <input type="color" id="gradColor2" value="#ffffff" style="width:100%;height:26px;border:1px solid var(--line-strong);border-radius:6px;background:var(--panel);cursor:pointer;">
+      </div>
+      <div class="field" id="gradRoundField" style="display:none;">
+        <div class="field-row"><label>角の丸み</label><span class="val" id="gradRoundVal">0%</span></div>
+        <input type="range" id="gradRound" min="0" max="100" value="0">
       </div>
       <div class="field" id="gradHtModeField" style="display:none;">
         <div class="field-row"><label>ハーフトーン</label></div>
@@ -466,6 +474,22 @@
         <input type="range" id="gradCell" min="4" max="40" value="8">
       </div>
       <div class="layer-hint" style="padding:0;">ドラッグした向きにグラデーションします。散らしは始点側ほど形が大きく密になります。</div>
+    </div>
+
+    <div class="field" id="sparkleOptions" style="display:none;">
+      <div class="opt-title">キラキラ</div>
+      <div class="field">
+        <div class="field-row"><label>置き方</label></div>
+        <select class="layer-mode" id="sparkleSingle">
+          <option value="0">連続(ドラッグでまく)</option>
+          <option value="1">単発(クリックで1個)</option>
+        </select>
+      </div>
+      <div class="field" id="sparkleDensityField">
+        <div class="field-row"><label>密度・粒の数</label><span class="val" id="sparkleDensityVal">1.0</span></div>
+        <input type="range" id="sparkleDensity" min="0.2" max="3" step="0.1" value="1">
+      </div>
+      <div class="layer-hint" style="padding:0;">大きさは「ふとさ」で調整。単発はクリックした位置に1個だけ置きます。</div>
     </div>
 
     <div class="field">
@@ -617,7 +641,8 @@
   const tool = { name:'pen', color:'#3a4a54', size:8, opacity:1, smooth:3, shape:'round', angle:45, binary:true,
     text:{ font:'sans-serif', size:36, bold:false, layout:'straight', pathType:'freehand', radius:120, startDeg:-90, dir:1, side:'out' },
     selTol:32, fillRef:'composite', wandAdd:false, selMode:'wand', fillPattern:{type:'solid', scale:12},
-    grad:{shape:'linear', style:'smooth', cell:8, endType:'transparent', color2:'#ffffff', dotShape:'dot', htMode:'normal'} };
+    grad:{shape:'linear', style:'smooth', cell:8, endType:'transparent', color2:'#ffffff', dotShape:'dot', htMode:'normal', round:0},
+    sparkle:{density:1, single:false} };
   let selection = null;   // { mask:Uint8Array(CW*CH), edges:[[x,y]...] }
   let selDrag = null;     // 四角/投げ縄でドラッグ中の情報
   let gradDrag = null;    // グラデーションのドラッグ情報
@@ -687,6 +712,29 @@
       ctx.globalAlpha=0.06+rnd()*0.06; ctx.beginPath();
       ctx.arc(p.x+Math.cos(ang)*rad, p.y+Math.sin(ang)*rad, Math.max(0.5,size*0.04),0,Math.PI*2); ctx.fill(); }
     ctx.restore();
+  }
+  // キラキラ(4方向のきらめき)を1つ描く
+  function drawSparkle(ctx,cx,cy,R,rot,color){
+    const inner=R*0.30; ctx.save(); ctx.translate(cx,cy); ctx.rotate(rot||0); ctx.fillStyle=color; ctx.beginPath();
+    for(let i=0;i<4;i++){ const a0=i*Math.PI/2, a1=a0+Math.PI/4, a2=a0+Math.PI/2;
+      const t0x=Math.cos(a0)*R,t0y=Math.sin(a0)*R, cxx=Math.cos(a1)*inner,cyy=Math.sin(a1)*inner, t1x=Math.cos(a2)*R,t1y=Math.sin(a2)*R;
+      if(i===0)ctx.moveTo(t0x,t0y); ctx.quadraticCurveTo(cxx,cyy,t1x,t1y); }
+    ctx.closePath(); ctx.fill(); ctx.restore();
+  }
+  // ランダムにキラキラをまく(seedで決定的 → 再生でも同じ)
+  function sparkleStampInto(ctx,color,size,p,seed,density){
+    density=density||1; let s=(seed||1)>>>0; const rnd=()=>{ s=(s*9301+49297)%233280; return s/233280; };
+    const n=Math.max(1, Math.round((0.8+rnd()*1.2)*density));
+    for(let i=0;i<n;i++){ const R=size*(0.22+rnd()*0.78)*0.5; const ang=rnd()*Math.PI*2, rad=rnd()*size*0.55;
+      ctx.save(); ctx.globalAlpha=0.55+rnd()*0.45;
+      drawSparkle(ctx, p.x+Math.cos(ang)*rad, p.y+Math.sin(ang)*rad, Math.max(1.5,R), rnd()*Math.PI*2, color);
+      ctx.restore(); }
+  }
+  // イベント/設定に応じてキラキラを1点ぶん描く(単発=中央に1個、連続=散らし)
+  function sparklePaint(ctx, color, size, p, seed, density, single){
+    if(single){ let s=(seed||1)>>>0; const rot=((s*9301+49297)%233280)/233280*Math.PI;
+      ctx.save(); ctx.globalAlpha=1; drawSparkle(ctx, p.x, p.y, Math.max(2,size*0.5), rot, color); ctx.restore(); }
+    else sparkleStampInto(ctx,color,size,p,seed,density);
   }
 
   // ---------- layers ----------
@@ -819,7 +867,7 @@
   let drawing=false, lastP=null, smoothP=null, panning=false, panStart=null, scrollStart=null, airTimer=null, airPos=null, airSeed=1, moving=null, spaceDown=false, moveSess=null;
 
   function getPos(e){ const r=input.getBoundingClientRect(); return { x:(e.clientX-r.left)/zoom, y:(e.clientY-r.top)/zoom }; }
-  const isDrawTool = n => ['pen','pencil','brush','airbrush','marker','eraser'].includes(n);
+  const isDrawTool = n => ['pen','pencil','brush','airbrush','marker','eraser','sparkle'].includes(n);
 
   function pointerDown(e){
     const p=getPos(e);
@@ -870,6 +918,8 @@
 
     if(tool.name==='airbrush'){ airPos=p; airStampInto(wctx,tool.color,tool.size,p,airSeed); airSeed++; 
       airTimer=setInterval(()=>{ if(airPos){ airStampInto(wctx,tool.color,tool.size,airPos,airSeed++); previewComposite(); } },45);
+    } else if(tool.name==='sparkle'){ curStroke.density=tool.sparkle.density; curStroke.single=tool.sparkle.single;
+      sparklePaint(wctx,tool.color,tool.size,p,curStroke.seed+0,curStroke.density,curStroke.single);
     } else { wctx.strokeStyle=tool.color; wctx.fillStyle=tool.color; wetSeg(wctx,tool.name,tool.color,tool.size,p,{x:p.x+0.01,y:p.y},tool.shape,tool.angle);
       if(binOn){ const bb=segBBox(p,p,tool.size); thresholdRegion(wctx,bb.x,bb.y,bb.w,bb.h); } }
     previewComposite();
@@ -903,6 +953,10 @@
     const last={x:curStroke.pts[curStroke.pts.length-2],y:curStroke.pts[curStroke.pts.length-1]};
     const dist=Math.hypot(np.x-last.x,np.y-last.y);
     if(tool.name==='airbrush'){ airPos=np; if(dist>=2){ curStroke.pts.push(Math.round(np.x*2)/2,Math.round(np.y*2)/2); } return; }
+    if(tool.name==='sparkle'){ if(curStroke.single) return;   // 単発はドラッグでまかない
+      const spacing=Math.max(4, tool.size*0.5/(tool.sparkle.density||1));
+      if(dist>=spacing){ const k=curStroke.pts.length/2; curStroke.pts.push(Math.round(np.x*2)/2,Math.round(np.y*2)/2);
+        sparklePaint(wctx,tool.color,tool.size,np,curStroke.seed+k,curStroke.density,false); previewComposite(); } return; }
     if(dist<1.2) return;
     wctx.strokeStyle=tool.color; wctx.fillStyle=tool.color;
     wetSeg(wctx,tool.name,tool.color,tool.size,lastP,np,tool.shape,tool.angle);
@@ -924,7 +978,7 @@
     if(gradDrag){ const d=gradDrag; gradDrag=null; curctx.clearRect(0,0,CW,CH);
       if(Math.hypot(d.x1-d.x0,d.y1-d.y0)>=3){ const l=activeLayer();
         if(l){ const ev={t:'grad',lid:l.id,x0:d.x0,y0:d.y0,x1:d.x1,y1:d.y1,color:tool.color,op:tool.opacity,
-            shape:tool.grad.shape,style:tool.grad.style,cell:tool.grad.cell,endType:tool.grad.endType,color2:tool.grad.color2,dotShape:tool.grad.dotShape,htMode:tool.grad.htMode,seed:(Math.random()*100000)|0};
+            shape:tool.grad.shape,style:tool.grad.style,cell:tool.grad.cell,endType:tool.grad.endType,color2:tool.grad.color2,dotShape:tool.grad.dotShape,htMode:tool.grad.htMode,round:tool.grad.round,seed:(Math.random()*100000)|0};
           renderGradient(l.ctx, ev, CW, CH, selMaskCanvas); recordEvent(ev); updateThumb(l); redraw(); pushHistory(); toast('グラデーションを適用'); } }
       return; }
     if(!drawing)return; drawing=false;
@@ -1008,23 +1062,37 @@
     px.fill(); px.restore();
   }
   // グラデーション描画(なめらか:色→透明/2色, ハーフトーン散らし:網点/三角/四角)。selMaskで選択内に制限。
+  function gradTval(ev, x, y, len, ux, uy){
+    if(ev.shape==='radial') return Math.hypot(x-ev.x0,y-ev.y0)/len;
+    if(ev.shape==='box'){ const ax=Math.abs(x-ev.x0), ay=Math.abs(y-ev.y0); const rr=ev.round||0;
+      if(rr<=0) return Math.max(ax,ay)/len;
+      const pw=2+(1-rr)*14; return Math.pow(Math.pow(ax,pw)+Math.pow(ay,pw), 1/pw)/len; }
+    return ((x-ev.x0)*ux+(y-ev.y0)*uy)/len;
+  }
   function renderGradient(destCtx, ev, w, h, selMask){
     const paint=document.createElement('canvas'); paint.width=w; paint.height=h; const px=paint.getContext('2d');
-    px.globalAlpha=(ev.op!=null?ev.op:1);
     const len=Math.hypot(ev.x1-ev.x0, ev.y1-ev.y0)||1;
+    const ux=(ev.x1-ev.x0)/len, uy=(ev.y1-ev.y0)/len;
     if(ev.style==='halftone'){
+      if(ev.endType==='color2'){ px.fillStyle=ev.color2||'#ffffff'; px.fillRect(0,0,w,h); }   // 2色目を背景に敷く
       px.fillStyle=ev.color; const cell=Math.max(3, ev.cell||8);
-      const ux=(ev.x1-ev.x0)/len, uy=(ev.y1-ev.y0)/len; const dotShape=ev.dotShape||'dot'; const scatter=(ev.htMode!=='normal');
+      const dotShape=ev.dotShape||'dot'; const scatter=(ev.htMode!=='normal');
       let seed=(ev.seed||1)>>>0; const rnd=()=>{ seed=(seed*9301+49297)%233280; return seed/233280; };
       for(let cy=cell/2; cy<h; cy+=cell){ for(let cx=cell/2; cx<w; cx+=cell){
-        let t = (ev.shape==='radial') ? Math.hypot(cx-ev.x0,cy-ev.y0)/len : ((cx-ev.x0)*ux+(cy-ev.y0)*uy)/len;
-        t=Math.max(0,Math.min(1,t)); const c=1-t;
+        let t=gradTval(ev,cx,cy,len,ux,uy); t=Math.max(0,Math.min(1,t)); const c=1-t;
         let jx=0,jy=0,rot=0;
         if(scatter){ jx=(rnd()-0.5)*cell*0.6; jy=(rnd()-0.5)*cell*0.6; rot=rnd()*Math.PI*2; }   // チラシ: 乱数でゆらぎ・回転
         if(c<=0.02)continue;
         const r=(cell*0.5)*(0.35+1.35*c);   // 始点側ほど大きく(重なって密に)
         drawGradShape(px, cx+jx, cy+jy, Math.min(r, cell*1.1), dotShape, rot);
       }}
+    } else if(ev.shape==='box'){
+      const img=px.createImageData(w,h), d=img.data; const [r1,g1,b1]=hexToRgb(ev.color);
+      const two=(ev.endType==='color2'); let r2=0,g2=0,b2=0; if(two){ [r2,g2,b2]=hexToRgb(ev.color2||'#ffffff'); }
+      for(let y=0;y<h;y++)for(let x=0;x<w;x++){ let t=gradTval(ev,x,y,len,ux,uy); if(t>1)t=1; else if(t<0)t=0; const i=(y*w+x)*4;
+        if(two){ d[i]=r1+(r2-r1)*t|0; d[i+1]=g1+(g2-g1)*t|0; d[i+2]=b1+(b2-b1)*t|0; d[i+3]=255; }
+        else { d[i]=r1; d[i+1]=g1; d[i+2]=b1; d[i+3]=(1-t)*255|0; } }
+      px.putImageData(img,0,0);
     } else {
       let g; if(ev.shape==='radial') g=px.createRadialGradient(ev.x0,ev.y0,0, ev.x0,ev.y0,len);
       else g=px.createLinearGradient(ev.x0,ev.y0,ev.x1,ev.y1);
@@ -1032,9 +1100,8 @@
       g.addColorStop(1, (ev.endType==='color2') ? (ev.color2||'#ffffff') : hexToRgba(ev.color,0));
       px.fillStyle=g; px.fillRect(0,0,w,h);
     }
-    px.globalAlpha=1;
-    if(selMask){ px.globalCompositeOperation='destination-in'; px.drawImage(selMask,0,0); }
-    destCtx.drawImage(paint,0,0);
+    if(selMask){ px.globalCompositeOperation='destination-in'; px.drawImage(selMask,0,0); px.globalCompositeOperation='source-over'; }
+    destCtx.save(); destCtx.globalAlpha=(ev.op!=null?ev.op:1); destCtx.drawImage(paint,0,0); destCtx.restore();
   }
 
   // bucket fill. matchCanvas = 境界判定に使う画像(参照), destCtx = 実際に塗る先.
@@ -1514,12 +1581,14 @@
         const p={x:ev.pts[0],y:ev.pts[1]};
         play.stctx.strokeStyle=ev.color; play.stctx.fillStyle=ev.color;
         if(ev.tool==='airbrush') airStampInto(play.stctx,ev.color,ev.size,p,(ev.seed||1));
+        else if(ev.tool==='sparkle') sparklePaint(play.stctx,ev.color,ev.size,p,(ev.seed||1)+0,ev.density,ev.single);
         else { wetSeg(play.stctx,ev.tool,ev.color,ev.size,p,{x:p.x+0.01,y:p.y},ev.shape,ev.angle);
           if(ev.binary){ const bb=segBBox(p,p,ev.size); thresholdRegion(play.stctx,bb.x,bb.y,bb.w,bb.h); } }
       } else {
         const a={x:ev.pts[(atom.k-1)*2],y:ev.pts[(atom.k-1)*2+1]}, b={x:ev.pts[atom.k*2],y:ev.pts[atom.k*2+1]};
         play.stctx.strokeStyle=ev.color; play.stctx.fillStyle=ev.color;
         if(ev.tool==='airbrush') airStampInto(play.stctx,ev.color,ev.size,b,(ev.seed||1)+atom.k);
+        else if(ev.tool==='sparkle') sparklePaint(play.stctx,ev.color,ev.size,b,(ev.seed||1)+atom.k,ev.density,ev.single);
         else { wetSeg(play.stctx,ev.tool,ev.color,ev.size,a,b,ev.shape,ev.angle);
           if(ev.binary){ const bb=segBBox(a,b,ev.size); thresholdRegion(play.stctx,bb.x,bb.y,bb.w,bb.h); } }
       }
@@ -1635,6 +1704,7 @@
       else if(ev.t==='maskclear'){ if(ev.rle){ const mc=maskCanvasOf(decodeRLE(ev.rle)); l.ctx.save(); l.ctx.globalCompositeOperation='destination-out'; l.ctx.drawImage(mc,0,0); l.ctx.restore(); } }
       else if(ev.t==='st'){ stc.clearRect(0,0,CW,CH); stc.strokeStyle=ev.color; stc.fillStyle=ev.color; const n=ev.pts.length/2;
         if(ev.tool==='airbrush'){ for(let k=0;k<n;k++) airStampInto(stc,ev.color,ev.size,{x:ev.pts[k*2],y:ev.pts[k*2+1]},(ev.seed||1)+k); }
+        else if(ev.tool==='sparkle'){ for(let k=0;k<n;k++) sparklePaint(stc,ev.color,ev.size,{x:ev.pts[k*2],y:ev.pts[k*2+1]},(ev.seed||1)+k,ev.density,ev.single); }
         else { if(n===1){ wetSeg(stc,ev.tool,ev.color,ev.size,{x:ev.pts[0],y:ev.pts[1]},{x:ev.pts[0]+0.01,y:ev.pts[1]},ev.shape,ev.angle); }
           for(let k=1;k<n;k++) wetSeg(stc,ev.tool,ev.color,ev.size,{x:ev.pts[(k-1)*2],y:ev.pts[(k-1)*2+1]},{x:ev.pts[k*2],y:ev.pts[k*2+1]},ev.shape,ev.angle);
           if(ev.binary) thresholdRegion(stc,0,0,CW,CH); }
@@ -1679,6 +1749,7 @@
     document.getElementById('wandOptions').style.display = (name==='wand')?'flex':'none';
     document.getElementById('fillOptions').style.display = (name==='fill')?'flex':'none';
     document.getElementById('gradOptions').style.display = (name==='gradient')?'flex':'none';
+    document.getElementById('sparkleOptions').style.display = (name==='sparkle')?'flex':'none';
     if(name==='wand'){ document.getElementById('wandTolField').style.display=(tool.selMode==='wand')?'flex':'none'; }
     else { selDrag=null; }
     if(name!=='gradient') gradDrag=null;
@@ -1737,15 +1808,19 @@
     document.getElementById('gradCellField').style.display=halftone?'flex':'none';
     document.getElementById('gradShapeField').style.display=halftone?'flex':'none';
     document.getElementById('gradHtModeField').style.display=halftone?'flex':'none';
-    document.getElementById('gradEndField').style.display=halftone?'none':'flex';
-    document.getElementById('gradColor2Field').style.display=(!halftone && tool.grad.endType==='color2')?'flex':'none'; }
-  document.getElementById('gradShape').addEventListener('change',e=>{ tool.grad.shape=e.target.value; });
+    document.getElementById('gradRoundField').style.display=(tool.grad.shape==='box')?'flex':'none';
+    document.getElementById('gradEndField').style.display='flex';
+    document.getElementById('gradColor2Field').style.display=(tool.grad.endType==='color2')?'flex':'none'; }
+  document.getElementById('gradShape').addEventListener('change',e=>{ tool.grad.shape=e.target.value; updateGradUI(); });
   document.getElementById('gradStyle').addEventListener('change',e=>{ tool.grad.style=e.target.value; updateGradUI(); });
   document.getElementById('gradCell').addEventListener('input',e=>{ tool.grad.cell=+e.target.value; document.getElementById('gradCellVal').textContent=e.target.value+' px'; });
+  document.getElementById('gradRound').addEventListener('input',e=>{ tool.grad.round=+e.target.value/100; document.getElementById('gradRoundVal').textContent=e.target.value+'%'; });
   document.getElementById('gradEnd').addEventListener('change',e=>{ tool.grad.endType=e.target.value; updateGradUI(); });
   document.getElementById('gradColor2').addEventListener('input',e=>{ tool.grad.color2=e.target.value; });
   document.getElementById('gradDotShape').addEventListener('change',e=>{ tool.grad.dotShape=e.target.value; });
   document.getElementById('gradHtMode').addEventListener('change',e=>{ tool.grad.htMode=e.target.value; });
+  document.getElementById('sparkleSingle').addEventListener('change',e=>{ tool.sparkle.single=(e.target.value==='1'); document.getElementById('sparkleDensityField').style.display=tool.sparkle.single?'none':'flex'; });
+  document.getElementById('sparkleDensity').addEventListener('input',e=>{ tool.sparkle.density=+e.target.value; document.getElementById('sparkleDensityVal').textContent=(+e.target.value).toFixed(1); });
   document.getElementById('selFill').addEventListener('click',selFill);
   document.getElementById('selClear').addEventListener('click',selClear);
   document.getElementById('selInvert').addEventListener('click',selInvert);
@@ -1882,7 +1957,7 @@
     if(meta&&e.key.toLowerCase()==='z'){ e.preventDefault(); if(e.shiftKey)redo(); else undo(); }
     else if(meta&&e.key.toLowerCase()==='y'){ e.preventDefault(); redo(); }
     else if(meta&&e.key.toLowerCase()==='s'){ e.preventDefault(); save(); }
-    else if(!meta){ const map={b:'pen',n:'pencil',w:'brush',a:'airbrush',m:'marker',e:'eraser',g:'fill',i:'eyedropper',h:'move',t:'text',u:'wand'};
+    else if(!meta){ const map={b:'pen',n:'pencil',w:'brush',a:'airbrush',m:'marker',e:'eraser',g:'fill',i:'eyedropper',h:'move',t:'text',u:'wand',k:'sparkle'};
       if(map[e.key.toLowerCase()])selectTool(map[e.key.toLowerCase()]);
       if(e.key==='['){ setSize(tool.size-2); }
       if(e.key===']'){ setSize(tool.size+2); } } });
@@ -1914,6 +1989,11 @@
     document.getElementById('gradColor2').value = tool.grad.color2;
     document.getElementById('gradDotShape').value = tool.grad.dotShape;
     document.getElementById('gradHtMode').value = tool.grad.htMode;
+    document.getElementById('gradRound').value = Math.round(tool.grad.round*100);
+    document.getElementById('sparkleSingle').value = tool.sparkle.single?'1':'0';
+    document.getElementById('sparkleDensity').value = tool.sparkle.density;
+    document.getElementById('sparkleDensityVal').textContent = tool.sparkle.density.toFixed(1);
+    document.getElementById('sparkleDensityField').style.display = tool.sparkle.single?'none':'flex';
     updateGradUI();
     selectTool('pen'); pushHistory(); updateUndoRedo();
   }
