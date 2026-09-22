@@ -262,6 +262,9 @@
     <button class="tool" data-tool="sparkle" title="キラキラ (K)">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c.4 3.8 2 5.4 5.8 5.8C14 8.2 12.4 9.8 12 13.6 11.6 9.8 10 8.2 6.2 7.8 10 7.4 11.6 5.8 12 2z"/><path d="M18.5 13c.2 1.9 1 2.7 2.9 2.9-1.9.2-2.7 1-2.9 2.9-.2-1.9-1-2.7-2.9-2.9 1.9-.2 2.7-1 2.9-2.9z"/></svg><span>キラキラ</span>
     </button>
+    <button class="tool" data-tool="radial" title="放射線 (集中線・光) ドラッグで中心→半径">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg><span>放射線</span>
+    </button>
     <div class="tool-sep"></div>
     <button class="tool" data-tool="eraser" title="消しゴム (E)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20H7l-4-4a1.9 1.9 0 0 1 0-2.7l9-9a1.9 1.9 0 0 1 2.7 0l6 6a1.9 1.9 0 0 1 0 2.7L14 20"/><path d="M6 11l7 7"/></svg><span>消しゴム</span>
@@ -481,20 +484,45 @@
       <div class="field">
         <div class="field-row"><label>置き方</label></div>
         <select class="layer-mode" id="sparkleSingle">
-          <option value="0">連続(ドラッグでまく)</option>
           <option value="1">単発(クリックで1個)</option>
+          <option value="0">連続(ドラッグでまく)</option>
         </select>
       </div>
       <div class="field" id="sparkleDensityField">
         <div class="field-row"><label>密度・粒の数</label><span class="val" id="sparkleDensityVal">1.0</span></div>
         <input type="range" id="sparkleDensity" min="0.2" max="3" step="0.1" value="1">
       </div>
+      <div class="field">
+        <div class="field-row"><label>きらめきの長さ</label><span class="val" id="sparkleSpikeVal">70</span></div>
+        <input type="range" id="sparkleSpike" min="0" max="100" value="70">
+      </div>
       <div class="layer-hint" style="padding:0;">大きさは「ふとさ」で調整。単発はクリックした位置に1個だけ置きます。</div>
+    </div>
+
+    <div class="field" id="radialOptions" style="display:none;">
+      <div class="opt-title">放射線(集中線・光)</div>
+      <div class="field">
+        <div class="field-row"><label>本数</label><span class="val" id="radialCountVal">64</span></div>
+        <input type="range" id="radialCount" min="6" max="200" value="64">
+      </div>
+      <div class="field">
+        <div class="field-row"><label>長さのばらつき</label><span class="val" id="radialLenVal">45%</span></div>
+        <input type="range" id="radialLen" min="0" max="90" value="45">
+      </div>
+      <div class="field">
+        <div class="field-row"><label>中心の空き</label><span class="val" id="radialInnerVal">28%</span></div>
+        <input type="range" id="radialInner" min="0" max="80" value="28">
+      </div>
+      <div class="field">
+        <div class="field-row"><label>線の太さ</label><span class="val" id="radialWidthVal">1.5</span></div>
+        <input type="range" id="radialWidth" min="0.5" max="8" step="0.5" value="1.5">
+      </div>
+      <div class="layer-hint" style="padding:0;">中心からドラッグした距離が外側の半径になります。色は現在の色。</div>
     </div>
 
     <div class="field">
       <div class="field-row"><label>ふとさ</label><span class="val" id="sizeVal">8 px</span></div>
-      <input type="range" id="sizeRange" min="1" max="120" value="8">
+      <input type="range" id="sizeRange" min="1" max="400" value="8">
       <div class="size-presets" id="sizePresets"></div>
     </div>
     <div class="field">
@@ -642,10 +670,12 @@
     text:{ font:'sans-serif', size:36, bold:false, layout:'straight', pathType:'freehand', radius:120, startDeg:-90, dir:1, side:'out' },
     selTol:32, fillRef:'composite', wandAdd:false, selMode:'wand', fillPattern:{type:'solid', scale:12},
     grad:{shape:'linear', style:'smooth', cell:8, endType:'transparent', color2:'#ffffff', dotShape:'dot', htMode:'normal', round:0},
-    sparkle:{density:1, single:false} };
+    sparkle:{density:1, single:true, size:100, spike:0.3},
+    burst:{count:64, inner:0.3, width:1.5, lenVar:0.4} };
   let selection = null;   // { mask:Uint8Array(CW*CH), edges:[[x,y]...] }
   let selDrag = null;     // 四角/投げ縄でドラッグ中の情報
   let gradDrag = null;    // グラデーションのドラッグ情報
+  let radialDrag = null;  // 放射線のドラッグ情報
   let textPath = null;    // 確定/作成中の文字パスの点列 [x,y,x,y,...]
   let pathDragging = false; // フリーハンドでパスをなぞっている最中
   let pendingText = null;  // 文字入力中の配置情報 { layout, x, y, pts }
@@ -714,27 +744,48 @@
     ctx.restore();
   }
   // キラキラ(4方向のきらめき)を1つ描く
-  function drawSparkle(ctx,cx,cy,R,rot,color){
-    const inner=R*0.30; ctx.save(); ctx.translate(cx,cy); ctx.rotate(rot||0); ctx.fillStyle=color; ctx.beginPath();
+  function drawSparkle(ctx,cx,cy,R,rot,color,spike){
+    const inner=R*(spike!=null?spike:0.30); ctx.save(); ctx.translate(cx,cy); ctx.rotate(rot||0); ctx.fillStyle=color; ctx.beginPath();
     for(let i=0;i<4;i++){ const a0=i*Math.PI/2, a1=a0+Math.PI/4, a2=a0+Math.PI/2;
       const t0x=Math.cos(a0)*R,t0y=Math.sin(a0)*R, cxx=Math.cos(a1)*inner,cyy=Math.sin(a1)*inner, t1x=Math.cos(a2)*R,t1y=Math.sin(a2)*R;
       if(i===0)ctx.moveTo(t0x,t0y); ctx.quadraticCurveTo(cxx,cyy,t1x,t1y); }
     ctx.closePath(); ctx.fill(); ctx.restore();
   }
   // ランダムにキラキラをまく(seedで決定的 → 再生でも同じ)
-  function sparkleStampInto(ctx,color,size,p,seed,density){
+  function sparkleStampInto(ctx,color,size,p,seed,density,spike){
     density=density||1; let s=(seed||1)>>>0; const rnd=()=>{ s=(s*9301+49297)%233280; return s/233280; };
     const n=Math.max(1, Math.round((0.8+rnd()*1.2)*density));
     for(let i=0;i<n;i++){ const R=size*(0.22+rnd()*0.78)*0.5; const ang=rnd()*Math.PI*2, rad=rnd()*size*0.55;
       ctx.save(); ctx.globalAlpha=0.55+rnd()*0.45;
-      drawSparkle(ctx, p.x+Math.cos(ang)*rad, p.y+Math.sin(ang)*rad, Math.max(1.5,R), rnd()*Math.PI*2, color);
+      drawSparkle(ctx, p.x+Math.cos(ang)*rad, p.y+Math.sin(ang)*rad, Math.max(1.5,R), rnd()*Math.PI*2, color, spike);
       ctx.restore(); }
   }
   // イベント/設定に応じてキラキラを1点ぶん描く(単発=中央に1個、連続=散らし)
-  function sparklePaint(ctx, color, size, p, seed, density, single){
+  function sparklePaint(ctx, color, size, p, seed, density, single, spike){
     if(single){ let s=(seed||1)>>>0; const rot=((s*9301+49297)%233280)/233280*Math.PI;
-      ctx.save(); ctx.globalAlpha=1; drawSparkle(ctx, p.x, p.y, Math.max(2,size*0.5), rot, color); ctx.restore(); }
-    else sparkleStampInto(ctx,color,size,p,seed,density);
+      ctx.save(); ctx.globalAlpha=1; drawSparkle(ctx, p.x, p.y, Math.max(2,size*0.5), rot, color, spike); ctx.restore(); }
+    else sparkleStampInto(ctx,color,size,p,seed,density,spike);
+  }
+  // 放射線(集中線・光): 中心から外へ、ランダムな長さ・角度ゆらぎの線を描く。seedで決定的。
+  function renderBurst(destCtx, ev, w, h, selMask){
+    const paint=document.createElement('canvas'); paint.width=w; paint.height=h; const px=paint.getContext('2d');
+    px.strokeStyle=ev.color; px.lineCap='round';
+    let s=(ev.seed||1)>>>0; const rnd=()=>{ s=(s*9301+49297)%233280; return s/233280; };
+    const count=ev.count||40, inner=(ev.inner!=null?ev.inner:0.28), lenVar=(ev.lenVar!=null?ev.lenVar:0.45), R=ev.radius||1, wdt=ev.width||1.5;
+    const slot=(Math.PI*2)/count;
+    for(let i=0;i<count;i++){
+      const ang=i*slot + (rnd()-0.5)*slot*0.5;              // 均等配置＋控えめなゆらぎ(偏りを防ぐ)
+      const outer=R*(1 - rnd()*rnd()*lenVar);               // 多くは外周近く、一部だけ短め(自然な奥行き)
+      const innR=R*inner*(0.94+rnd()*0.12);                 // 中心の空きはほぼ一定できれいな円
+      if(outer<=innR) continue;
+      px.lineWidth=Math.max(0.4, wdt*(0.8+rnd()*0.4));      // 太さはそろえめ
+      px.beginPath();
+      px.moveTo(ev.cx+Math.cos(ang)*innR, ev.cy+Math.sin(ang)*innR);
+      px.lineTo(ev.cx+Math.cos(ang)*outer, ev.cy+Math.sin(ang)*outer);
+      px.stroke();
+    }
+    if(selMask){ px.globalCompositeOperation='destination-in'; px.drawImage(selMask,0,0); px.globalCompositeOperation='source-over'; }
+    destCtx.save(); destCtx.globalAlpha=(ev.op!=null?ev.op:1); destCtx.drawImage(paint,0,0); destCtx.restore();
   }
 
   // ---------- layers ----------
@@ -907,6 +958,8 @@
       redraw(); updateThumb(l); } return; }
     if(tool.name==='gradient'){ const l=activeLayer(); if(!l||!l.visible){ toast(l?'レイヤーが非表示です':'レイヤーがありません'); return; }
       gradDrag={ x0:p.x, y0:p.y, x1:p.x, y1:p.y }; input.setPointerCapture&&input.setPointerCapture(e.pointerId); return; }
+    if(tool.name==='radial'){ const l=activeLayer(); if(!l||!l.visible){ toast(l?'レイヤーが非表示です':'レイヤーがありません'); return; }
+      radialDrag={ cx:p.x, cy:p.y, r:0, seed:(Math.random()*100000)|0 }; input.setPointerCapture&&input.setPointerCapture(e.pointerId); return; }
 
     const l=activeLayer(); if(!l||!l.visible){ toast(l?'レイヤーが非表示です':'レイヤーがありません'); return; }
     drawing=true; input.setPointerCapture&&input.setPointerCapture(e.pointerId);
@@ -918,8 +971,8 @@
 
     if(tool.name==='airbrush'){ airPos=p; airStampInto(wctx,tool.color,tool.size,p,airSeed); airSeed++; 
       airTimer=setInterval(()=>{ if(airPos){ airStampInto(wctx,tool.color,tool.size,airPos,airSeed++); previewComposite(); } },45);
-    } else if(tool.name==='sparkle'){ curStroke.density=tool.sparkle.density; curStroke.single=tool.sparkle.single;
-      sparklePaint(wctx,tool.color,tool.size,p,curStroke.seed+0,curStroke.density,curStroke.single);
+    } else if(tool.name==='sparkle'){ curStroke.density=tool.sparkle.density; curStroke.single=tool.sparkle.single; curStroke.size=tool.sparkle.size; curStroke.spike=tool.sparkle.spike;
+      sparklePaint(wctx,tool.color,tool.sparkle.size,p,curStroke.seed+0,curStroke.density,curStroke.single,curStroke.spike);
     } else { wctx.strokeStyle=tool.color; wctx.fillStyle=tool.color; wetSeg(wctx,tool.name,tool.color,tool.size,p,{x:p.x+0.01,y:p.y},tool.shape,tool.angle);
       if(binOn){ const bb=segBBox(p,p,tool.size); thresholdRegion(wctx,bb.x,bb.y,bb.w,bb.h); } }
     previewComposite();
@@ -941,6 +994,10 @@
       curctx.beginPath(); curctx.arc(gradDrag.x0,gradDrag.y0,3.5/zoom,0,Math.PI*2); curctx.fill();
       curctx.beginPath(); curctx.arc(gradDrag.x1,gradDrag.y1,3.5/zoom,0,Math.PI*2); curctx.fill();
       curctx.restore(); return; }
+    if(radialDrag){ const q=getPos(e); radialDrag.r=Math.hypot(q.x-radialDrag.cx,q.y-radialDrag.cy);
+      curctx.clearRect(0,0,CW,CH);
+      renderBurst(curctx, {cx:radialDrag.cx,cy:radialDrag.cy,radius:radialDrag.r,color:tool.color,op:0.9,count:tool.burst.count,inner:tool.burst.inner,lenVar:tool.burst.lenVar,width:tool.burst.width,seed:radialDrag.seed}, CW, CH, null);
+      return; }
     if(pendingText) return;   // 文字入力中はマウス移動でプレビューを消さない
     if(pathDragging){ const q=getPos(e); const lx=textPath[textPath.length-2], ly=textPath[textPath.length-1];
       if(Math.hypot(q.x-lx,q.y-ly)>=4){ textPath.push(q.x,q.y); drawPathGuide(); } return; }
@@ -954,9 +1011,9 @@
     const dist=Math.hypot(np.x-last.x,np.y-last.y);
     if(tool.name==='airbrush'){ airPos=np; if(dist>=2){ curStroke.pts.push(Math.round(np.x*2)/2,Math.round(np.y*2)/2); } return; }
     if(tool.name==='sparkle'){ if(curStroke.single) return;   // 単発はドラッグでまかない
-      const spacing=Math.max(4, tool.size*0.5/(tool.sparkle.density||1));
+      const spacing=Math.max(4, tool.sparkle.size*0.3/(tool.sparkle.density||1));
       if(dist>=spacing){ const k=curStroke.pts.length/2; curStroke.pts.push(Math.round(np.x*2)/2,Math.round(np.y*2)/2);
-        sparklePaint(wctx,tool.color,tool.size,np,curStroke.seed+k,curStroke.density,false); previewComposite(); } return; }
+        sparklePaint(wctx,tool.color,tool.sparkle.size,np,curStroke.seed+k,curStroke.density,false,curStroke.spike); previewComposite(); } return; }
     if(dist<1.2) return;
     wctx.strokeStyle=tool.color; wctx.fillStyle=tool.color;
     wetSeg(wctx,tool.name,tool.color,tool.size,lastP,np,tool.shape,tool.angle);
@@ -974,6 +1031,10 @@
       if(d.mode==='rect'){ if(Math.abs(d.cx-d.sx)>=2 && Math.abs(d.cy-d.sy)>=2){ applySelection(rectMask(d.sx,d.sy,d.cx,d.cy)); made=true; } }
       else { if(d.pts.length>=6){ applySelection(polyMask(d.pts)); made=true; } }
       if(!made && !tool.wandAdd && selection){ setSelection(null,true); }   // 新規モードで空クリック→解除
+      return; }
+    if(radialDrag){ const d=radialDrag; radialDrag=null; curctx.clearRect(0,0,CW,CH);
+      if(d.r>=4){ const l=activeLayer(); if(l){ const ev={t:'burst',lid:l.id,cx:d.cx,cy:d.cy,radius:d.r,color:tool.color,op:tool.opacity,count:tool.burst.count,inner:tool.burst.inner,lenVar:tool.burst.lenVar,width:tool.burst.width,seed:d.seed};
+        renderBurst(l.ctx, ev, CW, CH, selMaskCanvas); recordEvent(ev); updateThumb(l); redraw(); pushHistory(); toast('放射線を適用'); } }
       return; }
     if(gradDrag){ const d=gradDrag; gradDrag=null; curctx.clearRect(0,0,CW,CH);
       if(Math.hypot(d.x1-d.x0,d.y1-d.y0)>=3){ const l=activeLayer();
@@ -1573,6 +1634,7 @@
       } }
     else if(ev.t==='text'){ endActiveStroke(); const l=playLayer(ev.lid); if(l) drawTextOnto(l.ctx, ev); }
     else if(ev.t==='grad'){ endActiveStroke(); const l=playLayer(ev.lid); if(l) renderGradient(l.ctx, ev, play.pw, play.ph, play.sel); }
+    else if(ev.t==='burst'){ endActiveStroke(); const l=playLayer(ev.lid); if(l) renderBurst(l.ctx, ev, play.pw, play.ph, play.sel); }
     else if(ev.t==='maskfill'){ endActiveStroke(); const l=playLayer(ev.lid); if(l&&ev.rle){ const mc=maskCanvasOf(decodeRLE(ev.rle)); const t=document.createElement('canvas'); t.width=play.pw;t.height=play.ph; const tx=t.getContext('2d'); tx.fillStyle=ev.color; tx.globalAlpha=(ev.op!=null?ev.op:1); tx.fillRect(0,0,play.pw,play.ph); tx.globalAlpha=1; tx.globalCompositeOperation='destination-in'; tx.drawImage(mc,0,0); l.ctx.drawImage(t,0,0); } }
     else if(ev.t==='maskclear'){ endActiveStroke(); const l=playLayer(ev.lid); if(l&&ev.rle){ const mc=maskCanvasOf(decodeRLE(ev.rle)); l.ctx.save(); l.ctx.globalCompositeOperation='destination-out'; l.ctx.drawImage(mc,0,0); l.ctx.restore(); } }
     else if(ev.t==='st'){
@@ -1581,14 +1643,14 @@
         const p={x:ev.pts[0],y:ev.pts[1]};
         play.stctx.strokeStyle=ev.color; play.stctx.fillStyle=ev.color;
         if(ev.tool==='airbrush') airStampInto(play.stctx,ev.color,ev.size,p,(ev.seed||1));
-        else if(ev.tool==='sparkle') sparklePaint(play.stctx,ev.color,ev.size,p,(ev.seed||1)+0,ev.density,ev.single);
+        else if(ev.tool==='sparkle') sparklePaint(play.stctx,ev.color,ev.size,p,(ev.seed||1)+0,ev.density,ev.single,ev.spike);
         else { wetSeg(play.stctx,ev.tool,ev.color,ev.size,p,{x:p.x+0.01,y:p.y},ev.shape,ev.angle);
           if(ev.binary){ const bb=segBBox(p,p,ev.size); thresholdRegion(play.stctx,bb.x,bb.y,bb.w,bb.h); } }
       } else {
         const a={x:ev.pts[(atom.k-1)*2],y:ev.pts[(atom.k-1)*2+1]}, b={x:ev.pts[atom.k*2],y:ev.pts[atom.k*2+1]};
         play.stctx.strokeStyle=ev.color; play.stctx.fillStyle=ev.color;
         if(ev.tool==='airbrush') airStampInto(play.stctx,ev.color,ev.size,b,(ev.seed||1)+atom.k);
-        else if(ev.tool==='sparkle') sparklePaint(play.stctx,ev.color,ev.size,b,(ev.seed||1)+atom.k,ev.density,ev.single);
+        else if(ev.tool==='sparkle') sparklePaint(play.stctx,ev.color,ev.size,b,(ev.seed||1)+atom.k,ev.density,ev.single,ev.spike);
         else { wetSeg(play.stctx,ev.tool,ev.color,ev.size,a,b,ev.shape,ev.angle);
           if(ev.binary){ const bb=segBBox(a,b,ev.size); thresholdRegion(play.stctx,bb.x,bb.y,bb.w,bb.h); } }
       }
@@ -1700,11 +1762,12 @@
         } else { l.ctx.clearRect(0,0,CW,CH); l.ctx.drawImage(cur,ev.dx,ev.dy); } }
       else if(ev.t==='text'){ drawTextOnto(l.ctx, ev); }
       else if(ev.t==='grad'){ renderGradient(l.ctx, ev, CW, CH, curSel); }
+      else if(ev.t==='burst'){ renderBurst(l.ctx, ev, CW, CH, curSel); }
       else if(ev.t==='maskfill'){ if(ev.rle){ const mc=maskCanvasOf(decodeRLE(ev.rle)); const t=document.createElement('canvas'); t.width=CW;t.height=CH; const tx=t.getContext('2d'); tx.fillStyle=ev.color; tx.globalAlpha=(ev.op!=null?ev.op:1); tx.fillRect(0,0,CW,CH); tx.globalAlpha=1; tx.globalCompositeOperation='destination-in'; tx.drawImage(mc,0,0); l.ctx.drawImage(t,0,0); } }
       else if(ev.t==='maskclear'){ if(ev.rle){ const mc=maskCanvasOf(decodeRLE(ev.rle)); l.ctx.save(); l.ctx.globalCompositeOperation='destination-out'; l.ctx.drawImage(mc,0,0); l.ctx.restore(); } }
       else if(ev.t==='st'){ stc.clearRect(0,0,CW,CH); stc.strokeStyle=ev.color; stc.fillStyle=ev.color; const n=ev.pts.length/2;
         if(ev.tool==='airbrush'){ for(let k=0;k<n;k++) airStampInto(stc,ev.color,ev.size,{x:ev.pts[k*2],y:ev.pts[k*2+1]},(ev.seed||1)+k); }
-        else if(ev.tool==='sparkle'){ for(let k=0;k<n;k++) sparklePaint(stc,ev.color,ev.size,{x:ev.pts[k*2],y:ev.pts[k*2+1]},(ev.seed||1)+k,ev.density,ev.single); }
+        else if(ev.tool==='sparkle'){ for(let k=0;k<n;k++) sparklePaint(stc,ev.color,ev.size,{x:ev.pts[k*2],y:ev.pts[k*2+1]},(ev.seed||1)+k,ev.density,ev.single,ev.spike); }
         else { if(n===1){ wetSeg(stc,ev.tool,ev.color,ev.size,{x:ev.pts[0],y:ev.pts[1]},{x:ev.pts[0]+0.01,y:ev.pts[1]},ev.shape,ev.angle); }
           for(let k=1;k<n;k++) wetSeg(stc,ev.tool,ev.color,ev.size,{x:ev.pts[(k-1)*2],y:ev.pts[(k-1)*2+1]},{x:ev.pts[k*2],y:ev.pts[k*2+1]},ev.shape,ev.angle);
           if(ev.binary) thresholdRegion(stc,0,0,CW,CH); }
@@ -1739,7 +1802,7 @@
     if(isDrawTool(name)) return 'none';
     if(name==='move') return 'move';
     if(name==='text') return 'text';
-    if(name==='fill'||name==='wand'||name==='eyedropper'||name==='gradient') return CROSSHAIR;
+    if(name==='fill'||name==='wand'||name==='eyedropper'||name==='gradient'||name==='radial') return CROSSHAIR;
     return 'default';
   }
   function selectTool(name){ endMoveSession(); tool.name=name; document.querySelectorAll('.tool').forEach(t=>t.classList.toggle('active',t.dataset.tool===name));
@@ -1750,6 +1813,8 @@
     document.getElementById('fillOptions').style.display = (name==='fill')?'flex':'none';
     document.getElementById('gradOptions').style.display = (name==='gradient')?'flex':'none';
     document.getElementById('sparkleOptions').style.display = (name==='sparkle')?'flex':'none';
+    document.getElementById('radialOptions').style.display = (name==='radial')?'flex':'none';
+    if(name!=='radial') radialDrag=null;
     if(name==='wand'){ document.getElementById('wandTolField').style.display=(tool.selMode==='wand')?'flex':'none'; }
     else { selDrag=null; }
     if(name!=='gradient') gradDrag=null;
@@ -1821,6 +1886,11 @@
   document.getElementById('gradHtMode').addEventListener('change',e=>{ tool.grad.htMode=e.target.value; });
   document.getElementById('sparkleSingle').addEventListener('change',e=>{ tool.sparkle.single=(e.target.value==='1'); document.getElementById('sparkleDensityField').style.display=tool.sparkle.single?'none':'flex'; });
   document.getElementById('sparkleDensity').addEventListener('input',e=>{ tool.sparkle.density=+e.target.value; document.getElementById('sparkleDensityVal').textContent=(+e.target.value).toFixed(1); });
+  document.getElementById('sparkleSpike').addEventListener('input',e=>{ tool.sparkle.spike=0.5-(+e.target.value/100)*0.42; document.getElementById('sparkleSpikeVal').textContent=e.target.value; });
+  document.getElementById('radialCount').addEventListener('input',e=>{ tool.burst.count=+e.target.value; document.getElementById('radialCountVal').textContent=e.target.value; });
+  document.getElementById('radialLen').addEventListener('input',e=>{ tool.burst.lenVar=+e.target.value/100; document.getElementById('radialLenVal').textContent=e.target.value+'%'; });
+  document.getElementById('radialInner').addEventListener('input',e=>{ tool.burst.inner=+e.target.value/100; document.getElementById('radialInnerVal').textContent=e.target.value+'%'; });
+  document.getElementById('radialWidth').addEventListener('input',e=>{ tool.burst.width=+e.target.value; document.getElementById('radialWidthVal').textContent=(+e.target.value).toFixed(1); });
   document.getElementById('selFill').addEventListener('click',selFill);
   document.getElementById('selClear').addEventListener('click',selClear);
   document.getElementById('selInvert').addEventListener('click',selInvert);
@@ -1994,6 +2064,10 @@
     document.getElementById('sparkleDensity').value = tool.sparkle.density;
     document.getElementById('sparkleDensityVal').textContent = tool.sparkle.density.toFixed(1);
     document.getElementById('sparkleDensityField').style.display = tool.sparkle.single?'none':'flex';
+    document.getElementById('radialCount').value = tool.burst.count; document.getElementById('radialCountVal').textContent = tool.burst.count;
+    document.getElementById('radialLen').value = Math.round(tool.burst.lenVar*100); document.getElementById('radialLenVal').textContent = Math.round(tool.burst.lenVar*100)+'%';
+    document.getElementById('radialInner').value = Math.round(tool.burst.inner*100); document.getElementById('radialInnerVal').textContent = Math.round(tool.burst.inner*100)+'%';
+    document.getElementById('radialWidth').value = tool.burst.width; document.getElementById('radialWidthVal').textContent = tool.burst.width.toFixed(1);
     updateGradUI();
     selectTool('pen'); pushHistory(); updateUndoRedo();
   }
