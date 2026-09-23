@@ -776,7 +776,7 @@
     for(let i=0;i<count;i++){
       const ang=i*slot + (rnd()-0.5)*slot*0.5;              // 均等配置＋控えめなゆらぎ(偏りを防ぐ)
       const outer=R*(1 - rnd()*rnd()*lenVar);               // 多くは外周近く、一部だけ短め(自然な奥行き)
-      const innR=R*inner*(0.94+rnd()*0.12);                 // 中心の空きはほぼ一定できれいな円
+      const innR=R*inner;                                  // 全ての線を同じ円周から開始 → 中央の空きを真円に固定
       if(outer<=innR) continue;
       px.lineWidth=Math.max(0.4, wdt*(0.8+rnd()*0.4));      // 太さはそろえめ
       px.beginPath();
