@@ -246,6 +246,15 @@
   .gif-sizes button.active { background: var(--accent); color: #fff; border-color: var(--accent-deep); }
   .gif-info { font-size: 12.5px; font-weight: 700; color: var(--ink); }
 
+  /* フィルターのパネル */
+  .filter-panel { position: absolute; top: 12px; right: 12px; z-index: 16; width: 236px; display: none; flex-direction: column; gap: 10px;
+    background: var(--panel); border: 1px solid var(--line-strong); border-radius: 12px; padding: 12px 14px; box-shadow: 0 8px 26px rgba(30,60,80,.25); }
+  .filter-panel.open { display: flex; }
+  .filter-panel .opt-title { color: var(--ink); font-size: 13px; }
+  .flt-opts { display: flex; flex-direction: column; gap: 10px; }
+  .flt-hint { font-size: 11px; line-height: 1.5; color: var(--ink-soft); }
+  .flt-scale { display: flex; justify-content: space-between; font-size: 10.5px; font-weight: 700; color: var(--ink-soft); margin-top: -2px; }
+
   .mobile-toggle { display: none; }
   @media (max-width: 860px) {
     .options { position: absolute; left: 62px; top: 0; bottom: 0; z-index: 25; box-shadow: 6px 0 18px rgba(0,0,0,.15); transform: translateX(-110%); transition: transform .2s; }
@@ -274,6 +283,7 @@
   <button class="head-btn" id="clearBtn" title="このレイヤーを消す">クリア</button>
   <button class="head-btn" id="themeBtn" title="テーマ切替">&#127769;</button>
   <button class="head-btn" id="animBtn" title="コマを並べてGIFアニメを作る">GIFアニメ</button>
+  <button class="head-btn" id="filterBtn" title="今のレイヤーにフィルターをかける(選択中なら選択の中だけ)">フィルター</button>
   <button class="head-btn" id="openBtn" title="PNG/GIFを開く(過程つきPNGは再生、アニメGIFはコマごと編集)">ひらく</button>
   <button class="head-btn primary" id="saveBtn" title="過程を埋め込んだPNGを保存">PNG保存</button>
   <button class="head-btn mobile-toggle" id="toggleLayers" title="レイヤー">&#9636;</button>
@@ -605,6 +615,37 @@
         <canvas id="cursorLayer"></canvas>
       </div>
     </div>
+    <div class="filter-panel" id="filterPanel">
+      <div class="opt-title">フィルター</div>
+      <select class="layer-mode" id="fltKind"><option value="fisheye">魚眼レンズ</option><option value="symmetry">シンメトリー</option></select>
+      <div class="flt-opts" id="fltOptsSymmetry" style="display:none;">
+        <div class="field">
+          <div class="field-row"><label>写しかた</label></div>
+          <div class="gif-sizes" id="symModes">
+            <button data-mode="lr">左 → 右</button><button data-mode="rl">右 → 左</button>
+            <button data-mode="tb">上 → 下</button><button data-mode="bt">下 → 上</button>
+            <button data-mode="quad">左上 → 4方向</button><button data-mode="kaleido">万華鏡</button>
+          </div>
+        </div>
+        <div class="field" id="symCountField" style="display:none;">
+          <div class="field-row"><label>くり返し</label><span class="val" id="symCountVal">6</span></div>
+          <input type="range" id="symCount" min="2" max="16" value="6">
+        </div>
+      </div>
+      <div class="flt-opts" id="fltOptsFisheye">
+      <div class="field">
+        <div class="field-row"><label>強さ</label><span class="val" id="fltStrengthVal">ふくらむ 60</span></div>
+        <input type="range" id="fltStrength" min="-100" max="100" value="60">
+        <div class="flt-scale"><span>へこむ</span><span>ふくらむ</span></div>
+      </div>
+      <div class="field">
+        <div class="field-row"><label>レンズの大きさ</label><span class="val" id="fltRadiusVal">200 px</span></div>
+        <input type="range" id="fltRadius" min="10" max="1000" value="200">
+      </div>
+      </div>
+      <div class="flt-hint" id="fltHint"></div>
+      <div class="rz-actions"><button class="head-btn" id="fltCancel">やめる</button><button class="head-btn primary" id="fltApply">適用する</button></div>
+    </div>
     <div id="textEntry" style="display:none;">
       <input type="text" id="textEntryInput" placeholder="文字を入力して Enter">
       <div class="te-actions"><button class="head-btn" id="textCancel">やめる</button><button class="head-btn primary" id="textOk">確定</button></div>
@@ -892,7 +933,7 @@
     if(idx===-1)layers.push(l); else layers.splice(idx+1,0,l); activeId=l.id; renderLayerList(); redraw(); return l; }
 
   function redraw(){ cctx.clearRect(0,0,CW,CH);
-    for(const l of layers){ if(!l.visible||l.opacity<=0)continue; cctx.globalAlpha=l.opacity; cctx.globalCompositeOperation=l.mode; cctx.drawImage(l.canvas,0,0);
+    for(const l of layers){ if(!l.visible||l.opacity<=0)continue; cctx.globalAlpha=l.opacity; cctx.globalCompositeOperation=l.mode; cctx.drawImage((filterUI&&filterUI.canvas&&filterUI.lid===l.id)?filterUI.canvas:l.canvas,0,0);
       if(moveSess && moveSess.lid===l.id) cctx.drawImage(moveSess.content, moveSess.dx, moveSess.dy); }
     cctx.globalAlpha=1; cctx.globalCompositeOperation='source-over'; scheduleNav(); }
 
@@ -1007,8 +1048,8 @@
   function restore(s){ layers=s.layers.map(sl=>{ const c=document.createElement('canvas'); c.width=CW; c.height=CH; const ctx=c.getContext('2d'); ctx.drawImage(sl.canvas,0,0);
     return {id:sl.id,name:sl.name,canvas:c,ctx,visible:sl.visible,opacity:sl.opacity,mode:sl.mode,ref:!!sl.ref}; }); activeId=s.activeId;
     if(!activeLayer()&&layers.length)activeId=layers[layers.length-1].id; renderLayerList(); redraw(); syncLayerControls(); }
-  function undo(){ endMoveSession(); if(histIndex>0){ histIndex--; restore(history[histIndex]); updateUndoRedo(); toast('元に戻す'); } }
-  function redo(){ endMoveSession(); if(histIndex<history.length-1){ histIndex++; restore(history[histIndex]); updateUndoRedo(); toast('やり直し'); } }
+  function undo(){ cancelFilter(); endMoveSession(); if(histIndex>0){ histIndex--; restore(history[histIndex]); updateUndoRedo(); toast('元に戻す'); } }
+  function redo(){ cancelFilter(); endMoveSession(); if(histIndex<history.length-1){ histIndex++; restore(history[histIndex]); updateUndoRedo(); toast('やり直し'); } }
   function updateUndoRedo(){ document.getElementById('undoBtn').style.opacity=histIndex>0?1:.4; document.getElementById('redoBtn').style.opacity=histIndex<history.length-1?1:.4; }
 
   // ---------- drawing ----------
@@ -1021,6 +1062,7 @@
     if(anim.playing){ stopAnim(); return; }   // 再生中にキャンバスを触ったら停止して編集へ
     const p=getPos(e);
     if(e.button===1||spaceDown){ panning=true; panStart={x:e.clientX,y:e.clientY}; scrollStart={x:stage.scrollLeft,y:stage.scrollTop}; return; }
+    if(filterUI){ filterDrag=true; filterPointer(e); return; }   // フィルター中: レンズの中心を動かす
     // 移動セッションを継続しない操作なら、まず確定
     const willMove = (tool.name==='move') || (tool.name==='wand' && tool.selMode==='wand' && selection && selMaskCanvas && pointInSelection(p));
     if(moveSess && !willMove) endMoveSession();
@@ -1078,6 +1120,7 @@
 
   function pointerMove(e){
     if(panning){ stage.scrollLeft=scrollStart.x-(e.clientX-panStart.x); stage.scrollTop=scrollStart.y-(e.clientY-panStart.y); scheduleNav(); return; }
+    if(filterUI){ if(filterDrag) filterPointer(e); return; }
     if(moving){ const q=getPos(e); if(moveSess){ moveSess.dx=moving.baseDx+(q.x-moving.sx); moveSess.dy=moving.baseDy+(q.y-moving.sy); redraw(); } return; }
     if(selDrag){ const q=getPos(e);
       if(selDrag.mode==='rect'){ selDrag.cx=q.x; selDrag.cy=q.y; }
@@ -1122,6 +1165,7 @@
 
   function pointerUp(e){
     if(panning){ panning=false; return; }
+    if(filterDrag){ filterDrag=false; return; }
     if(moving){ commitMove(); return; }
     if(pathDragging){ pathDragging=false; drawPathGuide(); if(textPath && textPath.length>=4) toast('Enterで文字入力へ / もう一度なぞると引き直し'); return; }
     if(selDrag){ const d=selDrag; selDrag=null; curctx.clearRect(0,0,CW,CH);
@@ -1169,7 +1213,7 @@
     }
     curctx.restore();
   }
-  input.addEventListener('pointerleave',()=>curctx.clearRect(0,0,CW,CH));
+  input.addEventListener('pointerleave',()=>{ if(!filterUI) curctx.clearRect(0,0,CW,CH); });
 
   function pickColor(p){ const x=Math.floor(p.x),y=Math.floor(p.y); const d=cctx.getImageData(x,y,1,1).data;
     if(d[3]===0){ toast('透明です'); return; }
@@ -1737,6 +1781,7 @@
         } else { const t=document.createElement('canvas'); t.width=play.pw; t.height=play.ph; t.getContext('2d').drawImage(l.canvas,0,0); l.ctx.clearRect(0,0,play.pw,play.ph); l.ctx.drawImage(t,ev.dx,ev.dy); }
       } }
     else if(ev.t==='text'){ endActiveStroke(); const l=playLayer(ev.lid); if(l) drawTextOnto(l.ctx, ev); }
+    else if(ev.t==='filter'){ endActiveStroke(); const l=playLayer(ev.lid); if(l) applyFilterEvent(l.ctx, ev, play.pw, play.ph, play.sel); }
     else if(ev.t==='grad'){ endActiveStroke(); const l=playLayer(ev.lid); if(l) renderGradient(l.ctx, ev, play.pw, play.ph, play.sel); }
     else if(ev.t==='burst'){ endActiveStroke(); const l=playLayer(ev.lid); if(l) renderBurst(l.ctx, ev, play.pw, play.ph, play.sel); }
     else if(ev.t==='maskfill'){ endActiveStroke(); const l=playLayer(ev.lid); if(l&&ev.rle){ const mc=maskCanvasOf(decodeRLE(ev.rle)); const t=document.createElement('canvas'); t.width=play.pw;t.height=play.ph; const tx=t.getContext('2d'); tx.fillStyle=ev.color; tx.globalAlpha=(ev.op!=null?ev.op:1); tx.fillRect(0,0,play.pw,play.ph); tx.globalAlpha=1; tx.globalCompositeOperation='destination-in'; tx.drawImage(mc,0,0); l.ctx.drawImage(t,0,0); } }
@@ -1867,6 +1912,7 @@
           l.ctx.clearRect(0,0,CW,CH); l.ctx.drawImage(st,0,0); l.ctx.drawImage(mv,ev.dx,ev.dy);
         } else { l.ctx.clearRect(0,0,CW,CH); l.ctx.drawImage(cur,ev.dx,ev.dy); } }
       else if(ev.t==='text'){ drawTextOnto(l.ctx, ev); }
+      else if(ev.t==='filter'){ applyFilterEvent(l.ctx, ev, CW, CH, curSel); }
       else if(ev.t==='grad'){ renderGradient(l.ctx, ev, CW, CH, curSel); }
       else if(ev.t==='burst'){ renderBurst(l.ctx, ev, CW, CH, curSel); }
       else if(ev.t==='maskfill'){ if(ev.rle){ const mc=maskCanvasOf(decodeRLE(ev.rle)); const t=document.createElement('canvas'); t.width=CW;t.height=CH; const tx=t.getContext('2d'); tx.fillStyle=ev.color; tx.globalAlpha=(ev.op!=null?ev.op:1); tx.fillRect(0,0,CW,CH); tx.globalAlpha=1; tx.globalCompositeOperation='destination-in'; tx.drawImage(mc,0,0); l.ctx.drawImage(t,0,0); } }
@@ -1890,7 +1936,7 @@
 
   // replay current in-editor drawing
   function replayCurrent(){
-    endMoveSession();
+    cancelFilter(); endMoveSession();
     const evs=currentEvents();
     if(!evs.some(e=>e.t!=='bgfill')){ toast('まだ描いていません'); return; }
     const payload={ v:1, w:CW, h:CH,
@@ -1915,7 +1961,7 @@
     if(name==='fill'||name==='wand'||name==='eyedropper'||name==='gradient'||name==='radial') return CROSSHAIR;
     return 'default';
   }
-  function selectTool(name){ endMoveSession(); tool.name=name; document.querySelectorAll('.tool').forEach(t=>t.classList.toggle('active',t.dataset.tool===name));
+  function selectTool(name){ cancelFilter(); endMoveSession(); tool.name=name; document.querySelectorAll('.tool').forEach(t=>t.classList.toggle('active',t.dataset.tool===name));
     input.style.cursor = toolCursor(name); curctx.clearRect(0,0,CW,CH);
     // ツール別オプションの表示切替
     document.getElementById('textOptions').style.display = (name==='text')?'flex':'none';
@@ -2282,7 +2328,7 @@
     renderLayerList(); redraw(); syncLayerControls();
     if(histIndex<0) pushHistory();
     updateUndoRedo(); renderOnion(); renderFrameStrip(); }
-  function leaveCurrentWork(){ endMoveSession(); cancelText(); cancelTextPath(); selDrag=null; if(selection) setSelection(null,false); }
+  function leaveCurrentWork(){ cancelFilter(); endMoveSession(); cancelText(); cancelTextPath(); selDrag=null; if(selection) setSelection(null,false); }
   function goFrame(i){ if(i<0||i>=frames.length||i===curFrame) return; leaveCurrentWork(); stashFrame(); loadFrame(i); }
 
   // blank=true: 同じレイヤー構成で中身は空(いちばん下は白)。false: 今のコマをまるごと複製
@@ -2329,7 +2375,7 @@
 
   // エディタ内での再生
   function frameDelayCs(f){ return Math.max(2,Math.round(100/anim.fps))*(f.hold||1); }
-  function startAnim(){ if(frames.length<2){ toast('コマを2枚以上にすると再生できます'); return; }
+  function startAnim(){ cancelFilter(); if(frames.length<2){ toast('コマを2枚以上にすると再生できます'); return; }
     leaveCurrentWork(); anim.cache=frames.map((f,i)=>flattenLayers(frameLayers(i)));
     anim.playing=true; anim.pIdx=curFrame; renderOnion(); curctx.clearRect(0,0,CW,CH);
     document.getElementById('animPlay').innerHTML='&#10074;&#10074;'; animStep(); }
@@ -2433,6 +2479,157 @@
   document.getElementById('confirmNo').addEventListener('click',closeConfirm);
   document.getElementById('confirmYes').addEventListener('click',()=>{ const fn=confirmFn; closeConfirm(); if(fn) fn(); });
   document.getElementById('confirmModal').addEventListener('click',e=>{ if(e.target.id==='confirmModal') closeConfirm(); });
+
+  // ---------- フィルター ----------
+  // 各フィルターは run(srcCanvas, w, h, ev) → 新しいcanvas を返す。ev は記録用のパラメータ(再生でも同じ結果になる)。
+  // 魚眼レンズ: 円の中をふくらませる(s>0)/へこませる(s<0)。円のふちでは元の絵とつながる。
+  function fisheyeRun(src, w, h, ev){
+    const out=document.createElement('canvas'); out.width=w; out.height=h; const ox=out.getContext('2d'); ox.drawImage(src,0,0);
+    const R=Math.max(2,ev.r), cx=ev.cx, cy=ev.cy, s=Math.max(-1,Math.min(1,ev.s||0)); if(!s) return out;
+    const x0=Math.max(0,Math.floor(cx-R)), y0=Math.max(0,Math.floor(cy-R)), x1=Math.min(w,Math.ceil(cx+R)), y1=Math.min(h,Math.ceil(cy+R));
+    const bw=x1-x0, bh=y1-y0; if(bw<=0||bh<=0) return out;
+    const sd=src.getContext('2d').getImageData(x0,y0,bw,bh).data;   // 参照先は必ず同じ円の中なので、この範囲だけでよい
+    const img=ox.getImageData(x0,y0,bw,bh), d=img.data;
+    const a=s>0 ? s*0.9 : 0, b=s<0 ? -s*2.5 : 0;
+    const px=(ix,iy,c)=>sd[(iy*bw+ix)*4+c];
+    for(let y=0;y<bh;y++){ const dy=y0+y+0.5-cy;
+      for(let x=0;x<bw;x++){ const dx=x0+x+0.5-cx, r=Math.hypot(dx,dy); if(r>=R) continue;
+        const t=r/R, u=1-t; const ft = s>0 ? t-a*t*u*u : t*(1+b*u*u);          // ふちで傾き1 → 境目が折れない
+        const k = t>0 ? ft/t : (s>0 ? 1-a : 1+b);
+        let fx=cx+dx*k-0.5-x0, fy=cy+dy*k-0.5-y0;
+        fx=Math.max(0,Math.min(bw-1,fx)); fy=Math.max(0,Math.min(bh-1,fy));
+        const ix=Math.min(bw-2,Math.floor(fx))|0, iy=Math.min(bh-2,Math.floor(fy))|0;
+        const X0=Math.max(0,ix), Y0=Math.max(0,iy), X1=Math.min(bw-1,X0+1), Y1=Math.min(bh-1,Y0+1);
+        const wx=fx-X0, wy=fy-Y0;
+        const w00=(1-wx)*(1-wy), w10=wx*(1-wy), w01=(1-wx)*wy, w11=wx*wy;
+        const a00=px(X0,Y0,3)*w00, a10=px(X1,Y0,3)*w10, a01=px(X0,Y1,3)*w01, a11=px(X1,Y1,3)*w11;   // 透明部分のにじみを防ぐため不透明度で重みづけ
+        const A=a00+a10+a01+a11, o=(y*bw+x)*4;
+        if(A<=0.001){ d[o]=d[o+1]=d[o+2]=d[o+3]=0; continue; }
+        for(let c=0;c<3;c++) d[o+c]=(px(X0,Y0,c)*a00+px(X1,Y0,c)*a10+px(X0,Y1,c)*a01+px(X1,Y1,c)*a11)/A;
+        d[o+3]=A; } }
+    ox.putImageData(img,x0,y0); return out; }
+  // シンメトリー: 軸(中心)を境に片側を反対側へ鏡写し。万華鏡は中心のまわりにくさび形をくり返す。
+  function symmetryRun(src, w, h, ev){
+    const out=document.createElement('canvas'); out.width=w; out.height=h; const ox=out.getContext('2d'); ox.drawImage(src,0,0);
+    const cx=Math.round(ev.cx), cy=Math.round(ev.cy), mode=ev.mode||'lr';
+    const mirror=(axis, fromFirst)=>{      // fromFirst: 左(上)を写す
+      const snap=document.createElement('canvas'); snap.width=w; snap.height=h; snap.getContext('2d').drawImage(out,0,0);
+      ox.save(); ox.beginPath();
+      if(axis==='x'){ if(fromFirst) ox.rect(cx,0,w-cx,h); else ox.rect(0,0,cx,h); }
+      else { if(fromFirst) ox.rect(0,cy,w,h-cy); else ox.rect(0,0,w,cy); }
+      ox.clip(); ox.clearRect(0,0,w,h);
+      if(axis==='x'){ ox.translate(2*cx,0); ox.scale(-1,1); } else { ox.translate(0,2*cy); ox.scale(1,-1); }
+      ox.drawImage(snap,0,0); ox.restore(); };
+    if(mode==='lr') mirror('x',true);
+    else if(mode==='rl') mirror('x',false);
+    else if(mode==='tb') mirror('y',true);
+    else if(mode==='bt') mirror('y',false);
+    else if(mode==='quad'){ mirror('x',true); mirror('y',true); }
+    else if(mode==='kaleido'){
+      const n=Math.max(2,Math.min(24,ev.n|0||6)), wedge=Math.PI/n, base=-Math.PI/2-wedge/2;   // 真上を向いたくさびが元になる
+      const sd=src.getContext('2d').getImageData(0,0,w,h).data, img=ox.createImageData(w,h), d=img.data;
+      const fcx=ev.cx, fcy=ev.cy;
+      for(let y=0;y<h;y++){ const dy=y+0.5-fcy;
+        for(let x=0;x<w;x++){ const dx=x+0.5-fcx, r=Math.hypot(dx,dy);
+          let th=Math.atan2(dy,dx)-base; th%=2*wedge; if(th<0) th+=2*wedge; if(th>wedge) th=2*wedge-th;
+          const a=base+th, fx=fcx+Math.cos(a)*r-0.5, fy=fcy+Math.sin(a)*r-0.5;
+          if(fx<-0.5||fy<-0.5||fx>w-0.5||fy>h-0.5) continue;
+          const X0=Math.max(0,Math.min(w-1,Math.floor(fx))), Y0=Math.max(0,Math.min(h-1,Math.floor(fy))), X1=Math.min(w-1,X0+1), Y1=Math.min(h-1,Y0+1);
+          const wx=Math.max(0,Math.min(1,fx-X0)), wy=Math.max(0,Math.min(1,fy-Y0));
+          const i00=(Y0*w+X0)*4, i10=(Y0*w+X1)*4, i01=(Y1*w+X0)*4, i11=(Y1*w+X1)*4;
+          const a00=sd[i00+3]*(1-wx)*(1-wy), a10=sd[i10+3]*wx*(1-wy), a01=sd[i01+3]*(1-wx)*wy, a11=sd[i11+3]*wx*wy, A=a00+a10+a01+a11;
+          if(A<=0.001) continue; const o=(y*w+x)*4;
+          for(let c=0;c<3;c++) d[o+c]=(sd[i00+c]*a00+sd[i10+c]*a10+sd[i01+c]*a01+sd[i11+c]*a11)/A;
+          d[o+3]=A; } }
+      ox.clearRect(0,0,w,h); ox.putImageData(img,0,0); }
+    return out; }
+  const FILTERS={ fisheye:{ label:'魚眼レンズ', run:fisheyeRun }, symmetry:{ label:'シンメトリー', run:symmetryRun } };
+  let symMode='lr';
+  const FILTER_HINTS={ fisheye:'キャンバスをクリック/ドラッグしてレンズの中心を動かせます。',
+    symmetry:'キャンバスをクリック/ドラッグして軸(中心)を動かせます。点線が鏡の位置です。' };
+
+  // レイヤーにフィルターをかける(選択があれば選択の中だけ)。エディタ/再生/編集で共通
+  function applyFilterEvent(layerCtx, ev, w, h, selMask){ const F=FILTERS[ev.kind]; if(!F) return;
+    const res=F.run(layerCtx.canvas, w, h, ev);
+    if(selMask){ const t=document.createElement('canvas'); t.width=w; t.height=h; const tx=t.getContext('2d');
+      tx.drawImage(res,0,0); tx.globalCompositeOperation='destination-in'; tx.drawImage(selMask,0,0);
+      layerCtx.save(); layerCtx.globalCompositeOperation='destination-out'; layerCtx.drawImage(selMask,0,0); layerCtx.restore(); layerCtx.drawImage(t,0,0); }
+    else { layerCtx.clearRect(0,0,w,h); layerCtx.drawImage(res,0,0); } }
+
+  // フィルターのパネル(開いている間はキャンバス上にプレビュー、クリック/ドラッグで中心を動かす)
+  let filterUI=null, filterDrag=false, filterRAF=null;
+  function filterParams(){ const kind=document.getElementById('fltKind').value;
+    if(kind==='symmetry') return { t:'filter', kind, lid:filterUI.lid, cx:Math.round(filterUI.cx*10)/10, cy:Math.round(filterUI.cy*10)/10,
+      mode:symMode, n:+document.getElementById('symCount').value };
+    return { t:'filter', kind:document.getElementById('fltKind').value, lid:filterUI.lid,
+    cx:Math.round(filterUI.cx*10)/10, cy:Math.round(filterUI.cy*10)/10,
+    r:+document.getElementById('fltRadius').value, s:+document.getElementById('fltStrength').value/100 }; }
+  function openFilter(){ if(filterUI){ cancelFilter(); return; }
+    if(typeof stopAnim==='function') stopAnim(); endMoveSession(); cancelText(); cancelTextPath();
+    const l=activeLayer(); if(!l||!l.visible){ toast(l?'レイヤーが非表示です':'レイヤーがありません'); return; }
+    let cx=CW/2, cy=CH/2, r=Math.round(Math.min(CW,CH)*0.35);
+    if(selection){ let x0=CW,y0=CH,x1=-1,y1=-1; const m=selection.mask;       // 選択があれば、その範囲に合わせる
+      for(let y=0;y<CH;y++){ const o=y*CW; for(let x=0;x<CW;x++) if(m[o+x]){ if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; } }
+      if(x1>=0){ cx=(x0+x1+1)/2; cy=(y0+y1+1)/2; r=Math.max(10,Math.round(Math.max(x1-x0,y1-y0)/2)); } }
+    const rr=document.getElementById('fltRadius'); rr.max=Math.round(Math.max(CW,CH)); rr.value=Math.min(+rr.max,r);
+    filterUI={ lid:l.id, cx, cy, canvas:null };
+    document.getElementById('filterPanel').classList.add('open'); document.getElementById('filterBtn').classList.add('on');
+    input.style.cursor='move'; syncFilterLabels(); scheduleFilterPreview(); }
+  function syncFilterLabels(){ const s=+document.getElementById('fltStrength').value, kind=document.getElementById('fltKind').value;
+    document.getElementById('fltOptsFisheye').style.display=kind==='fisheye'?'flex':'none';
+    document.getElementById('fltOptsSymmetry').style.display=kind==='symmetry'?'flex':'none';
+    document.getElementById('fltHint').textContent=(FILTER_HINTS[kind]||'')+'今のレイヤーだけにかかり、選択中なら選択の中だけにかかります。';
+    document.querySelectorAll('#symModes button').forEach(b=>b.classList.toggle('active',b.dataset.mode===symMode));
+    document.getElementById('symCountField').style.display=symMode==='kaleido'?'flex':'none';
+    document.getElementById('symCountVal').textContent=document.getElementById('symCount').value;
+    document.getElementById('fltStrengthVal').textContent=(s>0?'ふくらむ ':s<0?'へこむ ':'')+Math.abs(s);
+    document.getElementById('fltRadiusVal').textContent=document.getElementById('fltRadius').value+' px'; }
+  function scheduleFilterPreview(){ if(filterRAF) return; filterRAF=requestAnimationFrame(()=>{ filterRAF=null; renderFilterPreview(); }); }
+  function renderFilterPreview(){ if(!filterUI) return; const l=layers.find(x=>x.id===filterUI.lid); if(!l){ cancelFilter(); return; }
+    const c=document.createElement('canvas'); c.width=CW; c.height=CH; const x=c.getContext('2d'); x.drawImage(l.canvas,0,0);
+    applyFilterEvent(x, filterParams(), CW, CH, selMaskCanvas); filterUI.canvas=c; redraw(); drawFilterGuide(); }
+  function drawFilterGuide(){ curctx.clearRect(0,0,CW,CH); if(!filterUI) return;
+    if(document.getElementById('fltKind').value==='symmetry'){ drawSymGuide(); return; }
+    const r=+document.getElementById('fltRadius').value, lw=1/zoom;
+    curctx.save(); curctx.lineWidth=lw*1.5; curctx.setLineDash([6*lw,5*lw]);
+    curctx.strokeStyle='rgba(255,255,255,.9)'; curctx.beginPath(); curctx.arc(filterUI.cx,filterUI.cy,r,0,Math.PI*2); curctx.stroke();
+    curctx.strokeStyle='rgba(47,150,184,.95)'; curctx.lineDashOffset=5*lw; curctx.stroke();
+    curctx.setLineDash([]); curctx.beginPath(); curctx.moveTo(filterUI.cx-7*lw,filterUI.cy); curctx.lineTo(filterUI.cx+7*lw,filterUI.cy);
+    curctx.moveTo(filterUI.cx,filterUI.cy-7*lw); curctx.lineTo(filterUI.cx,filterUI.cy+7*lw); curctx.stroke(); curctx.restore(); }
+  function drawSymGuide(){ const lw=1/zoom, cx=Math.round(filterUI.cx), cy=Math.round(filterUI.cy);
+    const lines=[];   // [x0,y0,x1,y1,強調]
+    if(symMode==='lr'||symMode==='rl'||symMode==='quad') lines.push([cx,0,cx,CH,1]);
+    if(symMode==='tb'||symMode==='bt'||symMode==='quad') lines.push([0,cy,CW,cy,1]);
+    if(symMode==='kaleido'){ const n=+document.getElementById('symCount').value, wedge=Math.PI/n, base=-Math.PI/2-wedge/2, R=Math.hypot(CW,CH);
+      for(let k=0;k<2*n;k++){ const a=base+k*wedge; lines.push([filterUI.cx,filterUI.cy,filterUI.cx+Math.cos(a)*R,filterUI.cy+Math.sin(a)*R,k<2?1:0]); } }
+    curctx.save();
+    for(const [x0,y0,x1,y1,strong] of lines){ curctx.lineWidth=lw*(strong?1.6:1); curctx.setLineDash([6*lw,5*lw]);
+      curctx.beginPath(); curctx.moveTo(x0,y0); curctx.lineTo(x1,y1);
+      curctx.lineDashOffset=0; curctx.strokeStyle=strong?'rgba(255,255,255,.95)':'rgba(255,255,255,.6)'; curctx.stroke();
+      curctx.lineDashOffset=5*lw; curctx.strokeStyle=strong?'rgba(47,150,184,.95)':'rgba(47,150,184,.45)'; curctx.stroke(); }
+    curctx.restore(); }
+  function closeFilterUI(){ filterUI=null; filterDrag=false; document.getElementById('filterPanel').classList.remove('open');
+    document.getElementById('filterBtn').classList.remove('on'); curctx.clearRect(0,0,CW,CH); input.style.cursor=toolCursor(tool.name); }
+  function cancelFilter(){ if(!filterUI) return; closeFilterUI(); redraw(); }
+  function applyFilter(){ if(!filterUI) return; const ev=filterParams(); const l=layers.find(x=>x.id===ev.lid);
+    closeFilterUI(); if(!l){ redraw(); return; }
+    if(ev.kind==='fisheye' && !ev.s){ redraw(); toast('強さが0なので変化はありません'); return; }
+    applyFilterEvent(l.ctx, ev, CW, CH, selMaskCanvas); recordEvent(ev);
+    updateThumb(l); redraw(); pushHistory(); toast(FILTERS[ev.kind].label+'をかけました'); }
+  function filterPointer(e){ const p=getPos(e); filterUI.cx=Math.max(0,Math.min(CW,p.x)); filterUI.cy=Math.max(0,Math.min(CH,p.y)); drawFilterGuide(); scheduleFilterPreview(); }
+
+  document.getElementById('filterBtn').addEventListener('click',openFilter);
+  // スライダーを触った直後でも Enter=適用 / Esc=やめる が効くように、専用で拾う
+  window.addEventListener('keydown',e=>{ if(!filterUI) return; if(e.target.tagName==='INPUT' && e.target.type!=='range') return;
+    if(e.key==='Escape'){ e.preventDefault(); e.stopImmediatePropagation(); cancelFilter(); }
+    else if(e.key==='Enter'){ e.preventDefault(); e.stopImmediatePropagation(); applyFilter(); } }, true);
+  document.getElementById('fltStrength').addEventListener('input',()=>{ syncFilterLabels(); scheduleFilterPreview(); });
+  document.getElementById('fltRadius').addEventListener('input',()=>{ syncFilterLabels(); drawFilterGuide(); scheduleFilterPreview(); });
+  document.getElementById('fltKind').addEventListener('change',()=>{ syncFilterLabels(); drawFilterGuide(); scheduleFilterPreview(); });
+  document.querySelectorAll('#symModes button').forEach(b=>b.addEventListener('click',()=>{ symMode=b.dataset.mode; syncFilterLabels(); drawFilterGuide(); scheduleFilterPreview(); }));
+  document.getElementById('symCount').addEventListener('input',()=>{ syncFilterLabels(); drawFilterGuide(); scheduleFilterPreview(); });
+  document.getElementById('fltApply').addEventListener('click',applyFilter);
+  document.getElementById('fltCancel').addEventListener('click',cancelFilter);
 
   // ---------- init ----------
   function init(){
