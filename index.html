@@ -238,6 +238,16 @@
   .chip:hover { background: var(--accent-soft); border-color: var(--accent); }
   .chip.on { background: var(--accent); color: #fff; border-color: var(--accent-deep); }
   .chip.on.prev { background: #e2795f; border-color: #c9603f; }
+  .ab-time-box { flex: none; display: flex; flex-direction: column; gap: 5px; padding: 0 12px; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+  .ab-label { font-size: 11px; font-weight: 800; color: var(--ink-soft); }
+  .ab-time { display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+  .ab-time input { width: 64px; height: 30px; border-radius: 7px; border: 1px solid var(--line-strong); background: var(--panel-2); color: var(--ink);
+    font: inherit; font-size: 13px; font-weight: 800; padding: 0 6px; text-align: right; }
+  .ab-time input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .ab-time input.auto { color: var(--ink-soft); font-weight: 600; }
+  .frame-time { font-size: 10px; font-weight: 700; color: var(--ink-soft); line-height: 1.1; }
+  .frame-time.custom { color: #d0613f; font-weight: 800; }
+  .ab-total { font-size: 10.5px; font-weight: 700; color: var(--ink-soft); text-align: center; }
   .ab-hold { height: 30px; border-radius: 7px; border: 1px solid var(--line-strong); background: var(--panel-2); color: var(--ink); font-weight: 700; font-size: 11.5px; padding: 0 4px; }
   #gifSaveBtn { flex: none; height: 40px; }
   .head-btn.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-deep); }
@@ -266,6 +276,7 @@
     .head-btn { padding: 0 8px; }
     .anim-bar { flex-wrap: wrap; gap: 8px; }
     .frame-strip { order: -1; flex-basis: 100%; }
+    .ab-time-box { border: none; padding: 0; }
   }
 </style>
 </head>
@@ -700,11 +711,12 @@
   <div class="ab-play">
     <button class="pbtn main" id="animPlay" title="アニメを再生/停止">&#9654;</button>
     <div class="ab-col">
-      <select class="pspeed" id="animFps" title="1秒に何コマ進むか">
+      <select class="pspeed" id="animFps" title="基本の速さ。時間を決めていないコマ(自動)はこの速さで進みます">
         <option value="24">24コマ/秒</option><option value="15">15コマ/秒</option><option value="12">12コマ/秒</option><option value="10">10コマ/秒</option>
         <option value="8" selected>8コマ/秒</option><option value="6">6コマ/秒</option><option value="4">4コマ/秒</option><option value="2">2コマ/秒</option><option value="1">1コマ/秒</option>
       </select>
       <span class="ab-count" id="frameCount">1 / 1</span>
+      <span class="ab-total" id="animTotal"></span>
     </div>
   </div>
   <div class="frame-strip" id="frameStrip"></div>
@@ -718,10 +730,15 @@
     <div class="ab-row">
       <button class="chip prev on" id="onionPrev" title="前のコマを赤く透かして表示">前を透かす</button>
       <button class="chip" id="onionNext" title="次のコマを青く透かして表示">次も</button>
-      <select class="ab-hold" id="frameHold" title="このコマを表示する長さ">
-        <option value="1">長さ ×1</option><option value="2">長さ ×2</option><option value="3">長さ ×3</option><option value="4">長さ ×4</option><option value="6">長さ ×6</option><option value="8">長さ ×8</option>
-      </select>
     </div>
+  </div>
+  <div class="ab-time-box">
+    <div class="ab-label">このコマの時間</div>
+    <div class="ab-time">
+      <input type="number" id="frameTime" min="0.02" max="60" step="0.05" inputmode="decimal" title="このコマを止めておく時間(秒)。空にすると自動(基本の速さ)">秒
+      <button class="chip" id="frameAuto" title="基本の速さ(◯コマ/秒)に戻す">自動</button>
+    </div>
+    <button class="chip" id="frameTimeAll" title="全部のコマをこの時間にそろえる">全コマをこの時間に</button>
   </div>
   <button class="head-btn primary" id="gifSaveBtn" title="アニメGIFとして保存">GIF保存</button>
 </div>
@@ -2325,7 +2342,7 @@
   }
 
   // ---------- GIFアニメ: コマの管理 ----------
-  function newFrameObj(){ return { layers:[], activeId:null, history:null, histIndex:-1, record:null, hold:1, thumb:document.createElement('canvas') }; }
+  function newFrameObj(){ return { layers:[], activeId:null, history:null, histIndex:-1, record:null, hold:1, delay:null, thumb:document.createElement('canvas') }; }
   function frameLayers(i){ return i===curFrame ? layers : frames[i].layers; }
   function flattenLayers(ls){ const out=document.createElement('canvas'); out.width=CW; out.height=CH; const o=out.getContext('2d');
     o.fillStyle='#ffffff'; o.fillRect(0,0,CW,CH);
@@ -2366,7 +2383,7 @@
     nf.layers=layers.map(l=>copyLayer(l,!blank));
     if(blank){ const base=nf.layers[0]; nf.record={ v:1, w:CW, h:CH, layers:[], events:[] };
       if(base){ base.ctx.fillStyle='#ffffff'; base.ctx.fillRect(0,0,CW,CH); nf.record.events.push({t:'bgfill',lid:base.id,color:'#ffffff'}); } }
-    else { nf.hold=frames[curFrame].hold; nf.record={ v:1, w:CW, h:CH, layers:[], events:JSON.parse(JSON.stringify(currentEvents())) }; }
+    else { nf.hold=frames[curFrame].hold; nf.delay=frames[curFrame].delay; nf.record={ v:1, w:CW, h:CH, layers:[], events:JSON.parse(JSON.stringify(currentEvents())) }; }
     stashFrame(); frames.splice(curFrame+1,0,nf); loadFrame(curFrame+1);
     drawThumb(nf, composite); renderFrameStrip();
     toast(blank?'新しいコマを追加 ('+(curFrame+1)+'コマ目)':'コマを複製 ('+(curFrame+1)+'コマ目)'); }
@@ -2394,16 +2411,30 @@
   function renderFrameStrip(){ const box=document.getElementById('frameStrip'); box.innerHTML='';
     frames.forEach((f,i)=>{ const it=document.createElement('button'); it.className='frame-item'+(i===curFrame?' active':''); it.title=(i+1)+'コマ目';
       it.appendChild(f.thumb);
-      const no=document.createElement('div'); no.className='frame-no'; no.textContent=(i+1)+(f.hold>1?'  ×'+f.hold:''); it.appendChild(no);
+      const no=document.createElement('div'); no.className='frame-no'; no.textContent=i+1; it.appendChild(no);
+      const tm=document.createElement('div'); tm.className='frame-time'+(frameIsCustom(f)?' custom':''); tm.textContent=fmtSec(frameDelayCs(f)); it.appendChild(tm);
       it.addEventListener('click',()=>{ stopAnim(); goFrame(i); }); box.appendChild(it); });
     const add=document.createElement('button'); add.className='frame-add'; add.textContent='+'; add.title='新しいコマを後ろに追加';
     add.addEventListener('click',()=>addFrame(true)); box.appendChild(add);
     document.getElementById('frameCount').textContent=(curFrame+1)+' / '+frames.length;
-    document.getElementById('frameHold').value=String(frames[curFrame]?frames[curFrame].hold:1);
+    syncFrameTime();
     const act=box.children[curFrame]; if(act&&act.scrollIntoView) act.scrollIntoView({block:'nearest',inline:'nearest'}); }
 
   // エディタ内での再生
-  function frameDelayCs(f){ return Math.max(2,Math.round(100/anim.fps))*(f.hold||1); }
+  // コマの時間(1/100秒単位)。delay が決まっていればそれ、なければ基本の速さ×hold(旧データ)
+  function frameDelayCs(f){ if(f && f.delay!=null) return f.delay; return Math.max(2,Math.round(100/anim.fps))*((f&&f.hold)||1); }
+  function frameIsCustom(f){ return f.delay!=null || (f.hold||1)>1; }
+  function fmtSec(cs){ return (cs/100).toFixed(2).replace(/0$/,'').replace(/\.0$/,'')+'秒'; }
+  function clampDelay(sec){ return Math.max(2,Math.min(6000,Math.round(sec*100))); }   // GIFは0.02秒より短いと遅くなるブラウザがある
+  function syncFrameTime(){ const f=frames[curFrame]; if(!f) return; const inp=document.getElementById('frameTime');
+    const custom=frameIsCustom(f), cs=frameDelayCs(f);
+    if(document.activeElement!==inp) inp.value=String(+(cs/100).toFixed(2));
+    inp.classList.toggle('auto',!custom); document.getElementById('frameAuto').classList.toggle('on',!custom);
+    const total=frames.reduce((a,x)=>a+frameDelayCs(x),0);
+    document.getElementById('animTotal').textContent='1周 '+fmtSec(total); }
+  function setFrameTime(sec){ const f=frames[curFrame]; if(!f) return;
+    if(!(sec>0)){ f.delay=null; f.hold=1; } else { f.delay=clampDelay(sec); f.hold=1; }
+    renderFrameStrip(); }
   function startAnim(){ cancelFilter(); if(frames.length<2){ toast('コマを2枚以上にすると再生できます'); return; }
     leaveCurrentWork(); anim.cache=frames.map((f,i)=>flattenLayers(frameLayers(i)));
     anim.playing=true; anim.pIdx=curFrame; renderOnion(); curctx.clearRect(0,0,CW,CH);
@@ -2453,7 +2484,7 @@
       let appData=null;
       if(gifEmbed){ okBtn.textContent='編集データを作っています'; await nextTick();
         const proj={ v:1, w:CW, h:CH, fps:anim.fps, frames:frames.map((f,i)=>{ const ls=frameLayers(i);
-          return { hold:f.hold, activeId:(i===curFrame?activeId:f.activeId), layers:ls.map(l=>({ id:l.id, name:l.name, opacity:l.opacity, mode:l.mode, visible:l.visible, ref:!!l.ref, png:l.canvas.toDataURL('image/png') })) }; }) };
+          return { hold:f.hold, delay:f.delay, activeId:(i===curFrame?activeId:f.activeId), layers:ls.map(l=>({ id:l.id, name:l.name, opacity:l.opacity, mode:l.mode, visible:l.visible, ref:!!l.ref, png:l.canvas.toDataURL('image/png') })) }; }) };
         appData=new TextEncoder().encode(JSON.stringify(proj)); }
       // 2周目: 各コマをパレット番号にして書き出す
       const idxBuf=[new Uint8Array(W*H), new Uint8Array(W*H)];
@@ -2474,7 +2505,7 @@
     const loadImg=src=>new Promise(res=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=()=>res(null); im.src=src; });
     CW=Math.max(32,Math.min(4000,proj.w|0||CW)); CH=Math.max(32,Math.min(4000,proj.h|0||CH)); setCanvasSize();
     const nfs=[];
-    for(const pf of proj.frames){ const f=newFrameObj(); f.hold=Math.max(1,pf.hold|0||1);
+    for(const pf of proj.frames){ const f=newFrameObj(); f.hold=Math.max(1,pf.hold|0||1); f.delay=(pf.delay!=null && +pf.delay>0)?Math.max(2,Math.min(6000,Math.round(+pf.delay))):null;
       for(const pl of (pf.layers||[])){ const l=makeLayer(pl.name); if(pl.id) l.id=pl.id;
         l.opacity=(pl.opacity!=null?pl.opacity:1); l.mode=pl.mode||'source-over'; l.visible=pl.visible!==false; l.ref=!!pl.ref;
         if(pl.png){ const im=await loadImg(pl.png); if(im) l.ctx.drawImage(im,0,0); }
@@ -2492,12 +2523,18 @@
     document.getElementById('animBtn').classList.toggle('on',open); if(!open) stopAnim(); renderOnion(); scheduleNav(); }
   document.getElementById('animBtn').addEventListener('click',()=>setAnimBar(!document.getElementById('animBar').classList.contains('open')));
   document.getElementById('animPlay').addEventListener('click',()=>{ if(anim.playing) stopAnim(); else startAnim(); });
-  document.getElementById('animFps').addEventListener('change',e=>{ anim.fps=+e.target.value; });
+  document.getElementById('animFps').addEventListener('change',e=>{ anim.fps=+e.target.value; renderFrameStrip(); });
   document.getElementById('frameDup').addEventListener('click',()=>addFrame(false));
   document.getElementById('frameDel').addEventListener('click',deleteFrame);
   document.getElementById('frameLeft').addEventListener('click',()=>moveFrame(-1));
   document.getElementById('frameRight').addEventListener('click',()=>moveFrame(1));
-  document.getElementById('frameHold').addEventListener('change',e=>{ const f=frames[curFrame]; if(f){ f.hold=+e.target.value; renderFrameStrip(); } });
+  const frameTimeInp=document.getElementById('frameTime');
+  frameTimeInp.addEventListener('change',()=>{ const v=frameTimeInp.value.trim(); setFrameTime(v===''?0:parseFloat(v)); frameTimeInp.blur(); });
+  frameTimeInp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); frameTimeInp.blur(); } });
+  frameTimeInp.addEventListener('blur',()=>syncFrameTime());
+  document.getElementById('frameAuto').addEventListener('click',()=>{ setFrameTime(0); toast('このコマを自動の時間に戻しました'); });
+  document.getElementById('frameTimeAll').addEventListener('click',()=>{ const f=frames[curFrame]; if(!f) return; const d=f.delay, h=f.hold;
+    frames.forEach(x=>{ x.delay=d; x.hold=h; }); renderFrameStrip(); toast('全'+frames.length+'コマを '+fmtSec(frameDelayCs(f))+' にしました'); });
   document.getElementById('onionPrev').addEventListener('click',e=>{ anim.onionPrev=!anim.onionPrev; e.currentTarget.classList.toggle('on',anim.onionPrev); renderOnion(); });
   document.getElementById('onionNext').addEventListener('click',e=>{ anim.onionNext=!anim.onionNext; e.currentTarget.classList.toggle('on',anim.onionNext); renderOnion(); });
   document.getElementById('gifSaveBtn').addEventListener('click',openGifModal);
