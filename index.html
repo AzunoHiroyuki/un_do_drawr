@@ -492,6 +492,9 @@
           <option value="linear">直線</option>
           <option value="radial">円形</option>
           <option value="box">四角</option>
+          <option value="diamond">ひし形</option>
+          <option value="triangle">三角</option>
+          <option value="cross">十字</option>
         </select>
       </div>
       <div class="field">
@@ -515,6 +518,10 @@
       <div class="field" id="gradRoundField" style="display:none;">
         <div class="field-row"><label>角の丸み</label><span class="val" id="gradRoundVal">0%</span></div>
         <input type="range" id="gradRound" min="0" max="100" value="0">
+      </div>
+      <div class="field" id="gradArmField" style="display:none;">
+        <div class="field-row"><label>十字の太さ</label><span class="val" id="gradArmVal">35%</span></div>
+        <input type="range" id="gradArm" min="10" max="90" value="35">
       </div>
       <div class="field" id="gradHtModeField" style="display:none;">
         <div class="field-row"><label>ハーフトーン</label></div>
@@ -833,7 +840,7 @@
   const tool = { name:'pen', color:'#3a4a54', size:8, opacity:1, smooth:3, shape:'round', angle:45, binary:true,
     text:{ font:'sans-serif', size:36, bold:false, layout:'straight', pathType:'freehand', radius:120, startDeg:-90, dir:1, side:'out' },
     selTol:32, fillRef:'composite', wandAdd:false, selMode:'wand', fillPattern:{type:'solid', scale:12},
-    grad:{shape:'linear', style:'smooth', cell:8, endType:'transparent', color2:'#ffffff', dotShape:'dot', htMode:'normal', round:0},
+    grad:{shape:'linear', style:'smooth', cell:8, endType:'transparent', color2:'#ffffff', dotShape:'dot', htMode:'normal', round:0, arm:0.35},
     sparkle:{density:1, single:true, size:100, spike:0.3},
     burst:{count:64, inner:0.3, width:1.5, lenVar:0.4, tt:0, ttLen:0.45} };
   let selection = null;   // { mask:Uint8Array(CW*CH), edges:[[x,y]...] }
@@ -1221,7 +1228,7 @@
     if(gradDrag){ const d=gradDrag; gradDrag=null; curctx.clearRect(0,0,CW,CH);
       if(Math.hypot(d.x1-d.x0,d.y1-d.y0)>=3){ const l=activeLayer();
         if(l){ const ev={t:'grad',lid:l.id,x0:d.x0,y0:d.y0,x1:d.x1,y1:d.y1,color:tool.color,op:tool.opacity,
-            shape:tool.grad.shape,style:tool.grad.style,cell:tool.grad.cell,endType:tool.grad.endType,color2:tool.grad.color2,dotShape:tool.grad.dotShape,htMode:tool.grad.htMode,round:tool.grad.round,seed:(Math.random()*100000)|0};
+            shape:tool.grad.shape,style:tool.grad.style,cell:tool.grad.cell,endType:tool.grad.endType,color2:tool.grad.color2,dotShape:tool.grad.dotShape,htMode:tool.grad.htMode,round:tool.grad.round,arm:tool.grad.arm,seed:(Math.random()*100000)|0};
           renderGradient(l.ctx, ev, CW, CH, selMaskCanvas); recordEvent(ev); updateThumb(l); redraw(); pushHistory(); toast('グラデーションを適用'); } }
       return; }
     if(!drawing)return; drawing=false;
@@ -1307,6 +1314,20 @@
   // グラデーション描画(なめらか:色→透明/2色, ハーフトーン散らし:網点/三角/四角)。selMaskで選択内に制限。
   function gradTval(ev, x, y, len, ux, uy){
     if(ev.shape==='radial') return Math.hypot(x-ev.x0,y-ev.y0)/len;
+    if(ev.shape==='diamond'||ev.shape==='triangle'||ev.shape==='cross'){
+      // ドラッグの向きに合わせて回転: a=ドラッグ方向, b=それに直角
+      const dx=x-ev.x0, dy=y-ev.y0, a=dx*ux+dy*uy, b=-dx*uy+dy*ux, rr=ev.round||0;
+      const pn=(vals,pw)=>{ let s=0; for(const v of vals){ if(v>0) s+=Math.pow(v,pw); } return Math.pow(s,1/pw); };
+      if(ev.shape==='diamond'){   // 先端がドラッグした点。丸みで円に近づく
+        const pw=1+rr; return Math.pow(Math.pow(Math.abs(a),pw)+Math.pow(Math.abs(b),pw),1/pw)/len; }
+      if(ev.shape==='triangle'){  // 正三角形。頂点のひとつがドラッグした点
+        const d0=-a, d1=0.5*a-0.8660254*b, d2=0.5*a+0.8660254*b, k=len/2;
+        if(rr<=0) return Math.max(d0,d1,d2)/k;
+        return pn([d0,d1,d2], 2+(1-rr)*14)/k; }
+      // 十字: 腕の先がドラッグした点。太さ=腕の幅の割合
+      const arm=Math.max(0.05,Math.min(0.95,ev.arm||0.35)), A=Math.abs(a)/len, B=Math.abs(b)/len;
+      if(rr<=0) return Math.min(Math.max(A,B/arm), Math.max(B,A/arm));
+      const pw=2+(1-rr)*14; return Math.min(pn([A,B/arm],pw), pn([B,A/arm],pw)); }
     if(ev.shape==='box'){ const ax=Math.abs(x-ev.x0), ay=Math.abs(y-ev.y0); const rr=ev.round||0;
       if(rr<=0) return Math.max(ax,ay)/len;
       const pw=2+(1-rr)*14; return Math.pow(Math.pow(ax,pw)+Math.pow(ay,pw), 1/pw)/len; }
@@ -1329,7 +1350,7 @@
         const r=(cell*0.5)*(0.35+1.35*c);   // 始点側ほど大きく(重なって密に)
         drawGradShape(px, cx+jx, cy+jy, Math.min(r, cell*1.1), dotShape, rot);
       }}
-    } else if(ev.shape==='box'){
+    } else if(ev.shape==='box'||ev.shape==='diamond'||ev.shape==='triangle'||ev.shape==='cross'){
       const img=px.createImageData(w,h), d=img.data; const [r1,g1,b1]=hexToRgb(ev.color);
       const two=(ev.endType==='color2'); let r2=0,g2=0,b2=0; if(two){ [r2,g2,b2]=hexToRgb(ev.color2||'#ffffff'); }
       for(let y=0;y<h;y++)for(let x=0;x<w;x++){ let t=gradTval(ev,x,y,len,ux,uy); if(t>1)t=1; else if(t<0)t=0; const i=(y*w+x)*4;
@@ -2069,12 +2090,14 @@
     document.getElementById('gradCellField').style.display=halftone?'flex':'none';
     document.getElementById('gradShapeField').style.display=halftone?'flex':'none';
     document.getElementById('gradHtModeField').style.display=halftone?'flex':'none';
-    document.getElementById('gradRoundField').style.display=(tool.grad.shape==='box')?'flex':'none';
+    document.getElementById('gradRoundField').style.display=['box','diamond','triangle','cross'].includes(tool.grad.shape)?'flex':'none';
+    document.getElementById('gradArmField').style.display=(tool.grad.shape==='cross')?'flex':'none';
     document.getElementById('gradEndField').style.display='flex';
     document.getElementById('gradColor2Field').style.display=(tool.grad.endType==='color2')?'flex':'none'; }
   document.getElementById('gradShape').addEventListener('change',e=>{ tool.grad.shape=e.target.value; updateGradUI(); });
   document.getElementById('gradStyle').addEventListener('change',e=>{ tool.grad.style=e.target.value; updateGradUI(); });
   document.getElementById('gradCell').addEventListener('input',e=>{ tool.grad.cell=+e.target.value; document.getElementById('gradCellVal').textContent=e.target.value+' px'; });
+  document.getElementById('gradArm').addEventListener('input',e=>{ tool.grad.arm=+e.target.value/100; document.getElementById('gradArmVal').textContent=e.target.value+'%'; });
   document.getElementById('gradRound').addEventListener('input',e=>{ tool.grad.round=+e.target.value/100; document.getElementById('gradRoundVal').textContent=e.target.value+'%'; });
   document.getElementById('gradEnd').addEventListener('change',e=>{ tool.grad.endType=e.target.value; updateGradUI(); });
   document.getElementById('gradColor2').addEventListener('input',e=>{ tool.grad.color2=e.target.value; });
