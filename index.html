@@ -291,6 +291,8 @@
   .mf-reset .head-btn { height: 28px; padding: 0 10px; font-size: 11.5px; }
   .mf-reset .head-btn.danger { color: #c9483a; border-color: #e3b1aa; }
   .mf-reset .head-btn.danger:hover { background: #fbeceb; }
+  #mfToolBtns .shape-btn { font-size: 10.5px; padding: 0 2px; white-space: nowrap; }
+  #panelShapes button { font-size: 10.5px; padding: 0 2px; white-space: nowrap; }
   .mf-progress { font-size: 11.5px; font-weight: 700; color: var(--ink-soft); }
 
   .mobile-toggle { display: none; }
@@ -354,6 +356,12 @@
     </button>
     <button class="tool" data-tool="radial" title="放射線 (集中線・光) ドラッグで中心→半径">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg><span>放射線</span>
+    </button>
+    <button class="tool" data-tool="panel" title="コマ割り(マンガのコマ枠を配置)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="18" height="7"/><rect x="3" y="13" width="7.5" height="8"/><rect x="13.5" y="13" width="7.5" height="8"/></svg><span>コマ割り</span>
+    </button>
+    <button class="tool" data-tool="bubble" title="吹き出し(ドラッグで大きさ→クリックでしっぽ)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 4c5 0 9 3 9 7s-4 7-9 7c-1 0-2-.1-3-.4L4 20l1.6-4C4 14.7 3 13 3 11c0-4 4-7 9-7z"/></svg><span>吹き出し</span>
     </button>
     <div class="tool-sep"></div>
     <button class="tool" data-tool="eraser" title="消しゴム (E)">
@@ -613,6 +621,48 @@
       </div>
       <button class="toggle-btn" id="fukuroHollow" title="中を塗らずに透明にする(下の絵が透けます)">中を透明にする(中抜き)</button>
       <div class="layer-hint" style="padding:0;">ふちの色は「いろ」、中の線の太さは「ふとさ」で決まります。線が重なった所は中がつながります。</div>
+    </div>
+
+    <div class="field" id="panelOptions" style="display:none;">
+      <div class="opt-title">コマ割り</div>
+      <div class="field"><div class="field-row"><label>割り方(上の段から)</label></div>
+        <select class="layer-mode" id="panelPreset">
+          <option value="p1">1コマ</option><option value="p2">2段</option><option value="p3">3段</option><option value="p4">4コマ(縦4段)</option>
+          <option value="p22">2×2</option><option value="p12">1 / 2</option><option value="p21">2 / 1</option><option value="p121">1 / 2 / 1</option>
+          <option value="p212">2 / 1 / 2</option><option value="p323">2 / 3 / 2</option><option value="custom">自分で決める</option>
+        </select></div>
+      <div class="field" id="panelCustomField" style="display:none;"><div class="field-row"><label>段ごとのコマ数</label></div>
+        <input type="text" class="hex" id="panelCustom" placeholder="例: 1,2,3" style="text-transform:none;text-align:left;padding:0 6px;"></div>
+      <div class="field"><div class="field-row"><label>外の余白</label><span class="val" id="panelMarginVal"></span></div><input type="range" id="panelMargin" min="0" max="200" value="40"></div>
+      <div class="field"><div class="field-row"><label>コマの間(横)</label><span class="val" id="panelGxVal"></span></div><input type="range" id="panelGx" min="0" max="80" value="16"></div>
+      <div class="field"><div class="field-row"><label>コマの間(縦)</label><span class="val" id="panelGyVal"></span></div><input type="range" id="panelGy" min="0" max="120" value="24"></div>
+      <div class="field"><div class="field-row"><label>枠線の太さ</label><span class="val" id="panelLwVal"></span></div><input type="range" id="panelLw" min="1" max="20" value="4"></div>
+      <button class="head-btn" id="panelTemplate" style="width:100%;justify-content:center;" title="今のコマをすべて置きかえて、上の割り方で並べる">この割り方で並べ直す</button>
+      <div class="field"><div class="field-row"><label>コマを足す・形を変える</label></div>
+        <div class="gif-sizes" id="panelShapes" style="grid-template-columns:repeat(3,1fr);">
+          <button data-k="edit" title="頂点をドラッグで変形、中をドラッグで移動、辺の○をドラッグで頂点を追加、Alt+頂点クリックで頂点を消す">変形・移動</button>
+          <button data-k="rect">四角</button><button data-k="trap">台形</button><button data-k="itrap">逆台形</button>
+          <button data-k="para">平行四辺形</button><button data-k="slant">斜め切り</button><button data-k="tri">三角</button>
+          <button data-k="cut">角欠け</button><button data-k="ellipse">まる</button>
+        </div></div>
+      <div class="mf-reset"><span class="mf-progress" id="panelCount" style="flex:1;align-self:center;"></span>
+        <button class="head-btn" id="panelDel" title="選んだコマを消す (Delete)">選んだコマを消す</button>
+        <button class="head-btn" id="panelClearAll">全部消す</button></div>
+      <button class="toggle-btn on" id="panelOutside" title="コマの外側を白くする(下のレイヤーの絵がコマの中だけに見える)">コマの外を白くする</button>
+      <button class="head-btn primary" id="panelApply" style="width:100%;justify-content:center;">コマ枠を配置する</button>
+      <div class="layer-hint" style="padding:0;">形のボタンを選んでキャンバスをドラッグするとコマを足せます(Shiftで正方形)。頂点は近くの頂点にくっつきます(Shiftで無効)。配置すると新しい「コマ枠」レイヤーに描かれます。</div>
+    </div>
+
+    <div class="field" id="bubbleOptions" style="display:none;">
+      <div class="opt-title">吹き出し</div>
+      <div class="gif-sizes" id="bubbleShapes">
+        <button data-s="ellipse">まる</button><button data-s="round">角まる</button><button data-s="spike">ギザギザ</button>
+        <button data-s="cloud">もくもく</button><button data-s="rect" title="ナレーション用の四角(しっぽなし)">四角</button>
+      </div>
+      <div class="field"><div class="field-row"><label>線の太さ</label><span class="val" id="bubbleLwVal"></span></div><input type="range" id="bubbleLw" min="1" max="16" value="3"></div>
+      <button class="toggle-btn on" id="bubbleFill" title="中を白で塗る(オフで線だけ)">中を白く塗る</button>
+      <button class="toggle-btn on" id="bubbleTail" title="置いたあと、しっぽの先をクリックで決める">しっぽをつける</button>
+      <div class="layer-hint" style="padding:0;">ドラッグで大きさを決め、次にしっぽの先をクリック(Escでしっぽなし)。Shiftで縦横同じ大きさ。線の色は「いろ」。</div>
     </div>
 
     <div class="field" id="radialOptions" style="display:none;">
@@ -881,16 +931,23 @@
           <button class="lt-btn" id="mfNext" title="次の文字 (→)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>
         </div>
         <canvas id="mfCanvas" width="680" height="680"></canvas>
-        <div class="shape-row" id="mfToolBtns" style="display:grid;grid-template-columns:repeat(3,1fr);">
+        <div class="shape-row" id="mfToolBtns" style="display:grid;grid-template-columns:repeat(4,1fr);">
           <button class="shape-btn active" data-t="round" title="丸ペン"><span>●</span>丸ペン</button>
           <button class="shape-btn" data-t="flat" title="平ペン(角度を固定したペン先。向きで太さが変わる)"><span>▬</span>平ペン</button>
+          <button class="shape-btn" data-t="line" title="ドラッグで直線を引く(Shiftで15°ごとに固定)"><span>／</span>直線</button>
           <button class="shape-btn" data-t="fill" title="線で囲まれた内側をクリックして塗る"><span>◆</span>塗りつぶし</button>
+        </div>
+        <div class="field" id="mfLineNibField" style="display:none;">
+          <div class="field-row"><label>直線のペン先</label></div>
+          <div class="mf-tools"><button class="chip on" id="mfNibRound">丸</button><button class="chip" id="mfNibFlat">平</button></div>
         </div>
         <div class="field" id="mfPenField"><div class="field-row"><label>線の太さ</label><span class="val" id="mfPenVal">70</span></div><input type="range" id="mfPen" min="15" max="180" value="70"></div>
         <div class="field" id="mfAngleField" style="display:none;"><div class="field-row"><label>ペン先の角度</label><span class="val" id="mfAngleVal">35&deg;</span></div><input type="range" id="mfAngle" min="-90" max="90" value="35"></div>
         <div class="mf-tools">
-          <button class="head-btn" id="mfUndo" title="最後の1画(塗りつぶしも1回分)を消す (Ctrl+Z)">1画もどす</button>
+          <button class="head-btn" id="mfUndo" title="最後の操作(1画・塗りつぶし・貼り付け・消す)を取り消す (Ctrl+Z)">1つもどす</button>
           <button class="head-btn" id="mfClear">この文字を消す</button>
+          <button class="head-btn" id="mfCopy" title="この文字をコピー (Ctrl+C)">コピー</button>
+          <button class="head-btn" id="mfPaste" title="コピーした文字をこの文字に重ねて貼り付け (Ctrl+V)" disabled>貼り付け</button>
           <button class="chip on" id="mfGuide" title="お手本の文字を薄く表示">お手本</button>
         </div>
       </div>
@@ -1227,7 +1284,9 @@
     if(anim.playing){ stopAnim(); return; }   // 再生中にキャンバスを触ったら停止して編集へ
     const p=getPos(e);
     if(e.button===1||spaceDown){ panning=true; panStart={x:e.clientX,y:e.clientY}; scrollStart={x:stage.scrollLeft,y:stage.scrollTop}; return; }
-    if(filterUI){ filterDrag=true; filterPointer(e); return; }   // フィルター中: レンズの中心を動かす
+    if(filterUI){ filterDrag=true; filterPointer(e); return; }
+    if(tool.name==='panel'){ panelDown(p,e); input.setPointerCapture&&input.setPointerCapture(e.pointerId); return; }
+    if(tool.name==='bubble'){ bubbleDown(p); input.setPointerCapture&&input.setPointerCapture(e.pointerId); return; }   // フィルター中: レンズの中心を動かす
     // 移動セッションを継続しない操作なら、まず確定
     const willMove = (tool.name==='move') || (tool.name==='wand' && tool.selMode==='wand' && selection && selMaskCanvas && pointInSelection(p));
     if(moveSess && !willMove) endMoveSession();
@@ -1287,6 +1346,8 @@
   function pointerMove(e){
     if(panning){ stage.scrollLeft=scrollStart.x-(e.clientX-panStart.x); stage.scrollTop=scrollStart.y-(e.clientY-panStart.y); scheduleNav(); return; }
     if(filterUI){ if(filterDrag) filterPointer(e); return; }
+    if(tool.name==='panel'){ panelMove(getPos(e), e.shiftKey); return; }
+    if(tool.name==='bubble'){ bubbleMove(getPos(e), e.shiftKey); return; }
     if(moving){ const q=getPos(e); if(moveSess){ moveSess.dx=moving.baseDx+(q.x-moving.sx); moveSess.dy=moving.baseDy+(q.y-moving.sy); redraw(); } return; }
     if(selDrag){ const q=getPos(e);
       if(selDrag.mode==='rect'){ selDrag.cx=q.x; selDrag.cy=q.y; }
@@ -1332,6 +1393,8 @@
   function pointerUp(e){
     if(panning){ panning=false; return; }
     if(filterDrag){ filterDrag=false; drawFilterGuide(); scheduleFilterPreview(); return; }
+    if(tool.name==='bubble'){ bubbleUp(); return; }
+    if(tool.name==='panel'){ panelUp(); return; }
     if(moving){ commitMove(); return; }
     if(pathDragging){ pathDragging=false; drawPathGuide(); if(textPath && textPath.length>=4) toast('Enterで文字入力へ / もう一度なぞると引き直し'); return; }
     if(selDrag){ const d=selDrag; selDrag=null; curctx.clearRect(0,0,CW,CH);
@@ -1379,7 +1442,7 @@
     }
     curctx.restore();
   }
-  input.addEventListener('pointerleave',()=>{ if(!filterUI) curctx.clearRect(0,0,CW,CH); });
+  input.addEventListener('pointerleave',()=>{ if(!filterUI && tool.name!=='panel' && !bubbleDrag) curctx.clearRect(0,0,CW,CH); });
 
   function pickColor(p){ const x=Math.floor(p.x),y=Math.floor(p.y); const d=cctx.getImageData(x,y,1,1).data;
     if(d[3]===0){ toast('透明です'); return; }
@@ -1963,6 +2026,8 @@
         } else { const t=document.createElement('canvas'); t.width=play.pw; t.height=play.ph; t.getContext('2d').drawImage(l.canvas,0,0); l.ctx.clearRect(0,0,play.pw,play.ph); l.ctx.drawImage(t,ev.dx,ev.dy); }
       } }
     else if(ev.t==='text'){ endActiveStroke(); const l=playLayer(ev.lid); if(l) drawTextOnto(l.ctx, ev); }
+    else if(ev.t==='panels'){ endActiveStroke(); const l=playLayer(ev.lid); if(l) renderPanels(l.ctx, ev, play.pw, play.ph); }
+    else if(ev.t==='bubble'){ endActiveStroke(); const l=playLayer(ev.lid); if(l) renderBubble(l.ctx, ev, play.pw, play.ph); }
     else if(ev.t==='filter'){ endActiveStroke(); const l=playLayer(ev.lid); if(l) applyFilterEvent(l.ctx, ev, play.pw, play.ph, play.sel); }
     else if(ev.t==='grad'){ endActiveStroke(); const l=playLayer(ev.lid); if(l) renderGradient(l.ctx, ev, play.pw, play.ph, play.sel); }
     else if(ev.t==='burst'){ endActiveStroke(); const l=playLayer(ev.lid); if(l) renderBurst(l.ctx, ev, play.pw, play.ph, play.sel); }
@@ -2094,6 +2159,8 @@
           l.ctx.clearRect(0,0,CW,CH); l.ctx.drawImage(st,0,0); l.ctx.drawImage(mv,ev.dx,ev.dy);
         } else { l.ctx.clearRect(0,0,CW,CH); l.ctx.drawImage(cur,ev.dx,ev.dy); } }
       else if(ev.t==='text'){ drawTextOnto(l.ctx, ev); }
+      else if(ev.t==='panels'){ renderPanels(l.ctx, ev, CW, CH); }
+      else if(ev.t==='bubble'){ renderBubble(l.ctx, ev, CW, CH); }
       else if(ev.t==='filter'){ applyFilterEvent(l.ctx, ev, CW, CH, curSel); }
       else if(ev.t==='grad'){ renderGradient(l.ctx, ev, CW, CH, curSel); }
       else if(ev.t==='burst'){ renderBurst(l.ctx, ev, CW, CH, curSel); }
@@ -2140,7 +2207,7 @@
     if(isDrawTool(name)) return 'none';
     if(name==='move') return 'move';
     if(name==='text') return 'text';
-    if(name==='fill'||name==='wand'||name==='eyedropper'||name==='gradient'||name==='radial') return CROSSHAIR;
+    if(name==='fill'||name==='wand'||name==='eyedropper'||name==='gradient'||name==='radial'||name==='bubble') return CROSSHAIR;
     return 'default';
   }
   function selectTool(name){ cancelFilter(); endMoveSession(); tool.name=name; document.querySelectorAll('.tool').forEach(t=>t.classList.toggle('active',t.dataset.tool===name));
@@ -2153,6 +2220,9 @@
     document.getElementById('sparkleOptions').style.display = (name==='sparkle')?'flex':'none';
     document.getElementById('radialOptions').style.display = (name==='radial')?'flex':'none';
     document.getElementById('fukuroOptions').style.display = (name==='fukuro')?'flex':'none';
+    document.getElementById('panelOptions').style.display = (name==='panel')?'flex':'none';
+    document.getElementById('bubbleOptions').style.display = (name==='bubble')?'flex':'none';
+    bubbleDrag=null; if(name==='panel') panelEnter();
     if(name!=='radial') radialDrag=null;
     if(name==='wand'){ document.getElementById('wandTolField').style.display=(tool.selMode==='wand')?'flex':'none'; }
     else { selDrag=null; }
@@ -3009,7 +3079,7 @@
   function mfPick(text){ const o={}; for(const ch of [...text]){ const g=myFont.glyphs[ch]; if(g&&g.s&&g.s.length) o[ch]=g; } return o; }
 
   // ---- 文字を描く画面 ----
-  const mfUI={ set:'upper', ch:'A', drawing:null, guide:true, pen:70, tool:'round', angle:35 };
+  const mfUI={ set:'upper', ch:'A', drawing:null, guide:true, pen:70, tool:'round', angle:35, lineNib:'round' };
   const mfCv=document.getElementById('mfCanvas'), mfx=mfCv.getContext('2d');
   function mfGlyph(ch){ return myFont.glyphs[ch]; }
   function mfThumb(c, ch){ const x=c.getContext('2d'); x.clearRect(0,0,c.width,c.height); const g=mfGlyph(ch); if(!g||!g.s.length) return false;
@@ -3059,21 +3129,47 @@
     mfCv.style.cursor = mfUI.tool==='fill' ? 'cell' : 'crosshair'; }
   function mfSetTool(t){ mfUI.tool=t; document.querySelectorAll('#mfToolBtns button').forEach(b=>b.classList.toggle('active',b.dataset.t===t));
     document.getElementById('mfPenField').style.display = t==='fill' ? 'none' : 'flex';
-    document.getElementById('mfAngleField').style.display = t==='flat' ? 'flex' : 'none'; mfDrawEditor(); }
+    document.getElementById('mfAngleField').style.display = (t==='flat' || (t==='line' && mfUI.lineNib==='flat')) ? 'flex' : 'none';
+    document.getElementById('mfLineNibField').style.display = t==='line' ? 'flex' : 'none';
+    document.getElementById('mfNibRound').classList.toggle('on',mfUI.lineNib==='round'); document.getElementById('mfNibFlat').classList.toggle('on',mfUI.lineNib==='flat');
+    mfDrawEditor(); }
   function mfPos(e){ const r=mfCv.getBoundingClientRect(); return [Math.round((e.clientX-r.left)/r.width*1000), Math.round((e.clientY-r.top)/r.height*1000)]; }
   mfCv.addEventListener('pointerdown',e=>{ e.preventDefault(); const [x,y]=mfPos(e);
     if(mfUI.tool==='fill'){ const r=mfMakeFill(mfGlyph(mfUI.ch),x,y);
       if(!r) return; if(r.err==='ink'){ toast('線の上ではなく、線で囲まれた内側をクリックしてください'); return; }
       if(r.err==='open'){ toast('囲まれていない所は塗れません。線をつないでからもう一度'); return; }
-      const g=myFont.glyphs[mfUI.ch]||(myFont.glyphs[mfUI.ch]={s:[]}); g.s.push(r); mfSave(); mfDrawEditor(); mfRenderGrid(); mfTest(); return; }
+      mfMod(g=>g.s.push(r)); return; }
     mfCv.setPointerCapture&&mfCv.setPointerCapture(e.pointerId);
-    mfUI.drawing = mfUI.tool==='flat' ? {t:'f', w:mfUI.pen, a:mfUI.angle, th:0.2, p:[x,y]} : [mfUI.pen,x,y]; mfDrawEditor(); });
-  mfCv.addEventListener('pointermove',e=>{ if(!mfUI.drawing) return; const [x,y]=mfPos(e), d=Array.isArray(mfUI.drawing)?mfUI.drawing:mfUI.drawing.p, lx=d[d.length-2], ly=d[d.length-1];
+    const flat = mfUI.tool==='flat' || (mfUI.tool==='line' && mfUI.lineNib==='flat');
+    mfUI.drawing = flat ? {t:'f', w:mfUI.pen, a:mfUI.angle, th:0.2, p:[x,y]} : [mfUI.pen,x,y];
+    mfLineMode = mfUI.tool==='line'; if(mfLineMode){ const d=Array.isArray(mfUI.drawing)?mfUI.drawing:mfUI.drawing.p; d.push(x,y); }
+    mfDrawEditor(); });
+  let mfLineMode=false;
+  mfCv.addEventListener('pointermove',e=>{ if(!mfUI.drawing) return; let [x,y]=mfPos(e); const d=Array.isArray(mfUI.drawing)?mfUI.drawing:mfUI.drawing.p;
+    if(mfLineMode){ const o=Array.isArray(mfUI.drawing)?1:0, sx=d[o], sy=d[o+1];   // 直線: 終点だけ動かす。Shiftで15°ごと
+      if(e.shiftKey){ const L=Math.hypot(x-sx,y-sy), a=Math.round(Math.atan2(y-sy,x-sx)/(Math.PI/12))*(Math.PI/12); x=Math.round(sx+Math.cos(a)*L); y=Math.round(sy+Math.sin(a)*L); }
+      d[d.length-2]=x; d[d.length-1]=y; mfDrawEditor(); return; }
+    const lx=d[d.length-2], ly=d[d.length-1];
     if(Math.hypot(x-lx,y-ly)<5) return; d.push(x,y); mfDrawEditor(); });
-  const mfEnd=()=>{ if(!mfUI.drawing) return; const d=mfUI.drawing; mfUI.drawing=null;
-    const g=myFont.glyphs[mfUI.ch]||(myFont.glyphs[mfUI.ch]={s:[]}); g.s.push(d); mfSave(); mfDrawEditor(); mfRenderGrid(); mfTest(); };
+  const mfEnd=()=>{ if(!mfUI.drawing) return; const d=mfUI.drawing; mfUI.drawing=null; mfLineMode=false;
+    mfMod(g=>g.s.push(d)); };
   mfCv.addEventListener('pointerup',mfEnd); mfCv.addEventListener('pointercancel',mfEnd);
-  function mfUndoStroke(){ const g=mfGlyph(mfUI.ch); if(!g||!g.s.length) return; g.s.pop(); if(!g.s.length) delete myFont.glyphs[mfUI.ch]; mfSave(); mfDrawEditor(); mfRenderGrid(); mfTest(); }
+  // 文字ごとの取り消し履歴(変更の前の状態を覚える)。履歴がなければ最後の1画を消す
+  const mfHist={}; let mfClip=null, mfClipFrom='';
+  function mfMod(fn){ const ch=mfUI.ch, g=myFont.glyphs[ch]; (mfHist[ch]||(mfHist[ch]=[])).push(g?JSON.stringify(g.s):null);
+    if(mfHist[ch].length>60) mfHist[ch].shift();
+    fn(myFont.glyphs[ch]||(myFont.glyphs[ch]={s:[]}));
+    if(myFont.glyphs[ch] && !myFont.glyphs[ch].s.length) delete myFont.glyphs[ch];
+    mfSave(); mfDrawEditor(); mfRenderGrid(); mfTest(); }
+  function mfUndoStroke(){ const ch=mfUI.ch, h=mfHist[ch];
+    if(h&&h.length){ const prev=h.pop(); if(prev==null) delete myFont.glyphs[ch]; else myFont.glyphs[ch]={s:JSON.parse(prev)}; }
+    else { const g=mfGlyph(ch); if(!g||!g.s.length) return; g.s.pop(); if(!g.s.length) delete myFont.glyphs[ch]; }
+    mfSave(); mfDrawEditor(); mfRenderGrid(); mfTest(); }
+  function mfCopy(){ const g=mfGlyph(mfUI.ch); if(!g||!g.s.length){ toast('この文字はまだ描かれていません'); return; }
+    mfClip=JSON.stringify(g.s); mfClipFrom=mfUI.ch; mfSyncClip(); toast('「'+mfUI.ch+'」をコピーしました'); }
+  function mfPaste(){ if(!mfClip){ toast('先にコピーしてください'); return; } const items=JSON.parse(mfClip);
+    mfMod(g=>{ g.s.push(...items); }); toast('「'+mfClipFrom+'」を「'+mfUI.ch+'」に貼り付けました'); }
+  function mfSyncClip(){ const b=document.getElementById('mfPaste'); b.disabled=!mfClip; b.textContent=mfClip?('「'+mfClipFrom+'」を貼り付け'):'貼り付け'; }
   function mfStep(dir){ const all=Object.values(MF_SETS).flat(); let i=all.indexOf(mfUI.ch); i=(i+dir+all.length)%all.length; mfSelect(all[i]); }
   // ためし書き
   function mfTest(){ const c=document.getElementById('mfTestCanvas'), x=c.getContext('2d'), txt=document.getElementById('mfTestText').value||'';
@@ -3091,7 +3187,11 @@
   document.getElementById('mfOpen').addEventListener('click',openMyFont);
   document.getElementById('mfClose').addEventListener('click',closeMyFont);
   document.getElementById('mfUndo').addEventListener('click',mfUndoStroke);
-  document.getElementById('mfClear').addEventListener('click',()=>{ if(!mfGlyph(mfUI.ch)) return; delete myFont.glyphs[mfUI.ch]; mfSave(); mfDrawEditor(); mfRenderGrid(); mfTest(); });
+  document.getElementById('mfClear').addEventListener('click',()=>{ if(!mfGlyph(mfUI.ch)) return; mfMod(g=>{ g.s.length=0; }); });
+  document.getElementById('mfCopy').addEventListener('click',mfCopy);
+  document.getElementById('mfPaste').addEventListener('click',mfPaste);
+  document.getElementById('mfNibRound').addEventListener('click',()=>{ mfUI.lineNib='round'; mfSetTool('line'); });
+  document.getElementById('mfNibFlat').addEventListener('click',()=>{ mfUI.lineNib='flat'; mfSetTool('line'); });
   document.getElementById('mfPrev').addEventListener('click',()=>mfStep(-1));
   document.getElementById('mfNext').addEventListener('click',()=>mfStep(1));
   document.getElementById('mfGuide').addEventListener('click',e=>{ mfUI.guide=!mfUI.guide; e.currentTarget.classList.toggle('on',mfUI.guide); mfDrawEditor(); });
@@ -3111,8 +3211,180 @@
     if(document.getElementById('confirmModal').classList.contains('open')){ if(e.key==='Escape'){ e.preventDefault(); closeConfirm(); } e.stopImmediatePropagation(); return; }
     if(e.target.id==='mfTestText') { if(e.key==='Escape'){ e.preventDefault(); closeMyFont(); } e.stopImmediatePropagation(); return; }
     const meta=e.ctrlKey||e.metaKey; let used=true;
-    if(meta&&e.key.toLowerCase()==='z') mfUndoStroke(); else if(e.key==='ArrowLeft') mfStep(-1); else if(e.key==='ArrowRight') mfStep(1); else if(e.key==='Escape') closeMyFont(); else used=false;
+    if(meta&&e.key.toLowerCase()==='z') mfUndoStroke(); else if(meta&&e.key.toLowerCase()==='c') mfCopy(); else if(meta&&e.key.toLowerCase()==='v') mfPaste(); else if(e.key==='ArrowLeft') mfStep(-1); else if(e.key==='ArrowRight') mfStep(1); else if(e.key==='Escape') closeMyFont(); else used=false;
     if(used) e.preventDefault(); e.stopImmediatePropagation(); }, true);
+
+  // ---------- コマ割り・吹き出し ----------
+  const PANEL_PRESETS={ p1:[1], p2:[1,1], p3:[1,1,1], p4:[1,1,1,1], p22:[2,2], p12:[1,2], p21:[2,1], p121:[1,2,1], p212:[2,1,2], p323:[2,3,2] };
+  tool.panel={ preset:'p121', custom:'1,2,1', margin:40, gx:16, gy:24, lw:4, outside:true };
+  tool.bubble={ shape:'ellipse', lw:3, fill:'white', tail:true };
+  function panelRows(){ const p=tool.panel; if(p.preset!=='custom') return PANEL_PRESETS[p.preset];
+    const r=(p.custom||'').split(/[,、\s]+/).map(v=>parseInt(v,10)).filter(v=>v>0&&v<=8).slice(0,8); return r.length?r:[1]; }
+  function computePanels(rows, W, H, m, gx, gy){ const out=[], cw=W-m*2, ch=H-m*2, rh=(ch-gy*(rows.length-1))/rows.length;
+    rows.forEach((n,i)=>{ const y=m+i*(rh+gy), w=(cw-gx*(n-1))/n; for(let j=0;j<n;j++) out.push([Math.round(m+j*(w+gx)),Math.round(y),Math.round(w),Math.round(rh)]); });
+    return out; }
+  // コマ枠の描画。ev.shapes=[{k:'p'(多角形)|'e'(楕円), p:[x,y,...]}]。古い記録の ev.rects にも対応
+  function panelShapes(ev){ if(ev.shapes) return ev.shapes; return (ev.rects||[]).map(r=>({k:'p',p:[r[0],r[1],r[0]+r[2],r[1],r[0]+r[2],r[1]+r[3],r[0],r[1]+r[3]]})); }
+  function shapePath(x, sh){ const p=sh.p;
+    if(sh.k==='e'){ let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(let i=0;i<p.length;i+=2){ x0=Math.min(x0,p[i]); x1=Math.max(x1,p[i]); y0=Math.min(y0,p[i+1]); y1=Math.max(y1,p[i+1]); }
+      x.moveTo(x1,(y0+y1)/2); x.ellipse((x0+x1)/2,(y0+y1)/2,Math.max(1,(x1-x0)/2),Math.max(1,(y1-y0)/2),0,0,Math.PI*2); x.closePath(); return; }
+    x.moveTo(p[0],p[1]); for(let i=2;i<p.length;i+=2) x.lineTo(p[i],p[i+1]); x.closePath(); }
+  function renderPanels(ctx, ev, W, H){
+    const t=document.createElement('canvas'); t.width=W; t.height=H; const x=t.getContext('2d'), shapes=panelShapes(ev);
+    if(ev.outside){ x.fillStyle='#ffffff'; x.fillRect(0,0,W,H); x.globalCompositeOperation='destination-out';
+      for(const sh of shapes){ x.beginPath(); shapePath(x,sh); x.fill(); } x.globalCompositeOperation='source-over'; }
+    x.strokeStyle=ev.color; x.lineWidth=ev.lw; x.lineJoin='miter'; x.miterLimit=6;
+    for(const sh of shapes){ x.beginPath(); shapePath(x,sh); x.stroke(); }
+    ctx.save(); ctx.globalAlpha=(ev.op!=null?ev.op:1); ctx.drawImage(t,0,0); ctx.restore(); }
+
+  // ---- コマの編集(配置前に形を変えられる) ----
+  const pe={ shapes:[], sel:-1, mode:'edit', drag:null, dirty:false, started:false };
+  function rectShape(r){ return {k:'p',p:[r[0],r[1],r[0]+r[2],r[1],r[0]+r[2],r[1]+r[3],r[0],r[1]+r[3]]}; }
+  function panelTemplate(){ const p=tool.panel; pe.shapes=computePanels(panelRows(),CW,CH,p.margin,p.gx,p.gy).map(rectShape); pe.sel=-1; pe.dirty=false; pe.started=true; previewPanels(); }
+  // 基本セット: ドラッグした四角の中に形を作る
+  function makeShape(kind, x0,y0,x1,y1){ const w=x1-x0, h=y1-y0, cx=(x0+x1)/2, P=a=>a.map(Math.round);
+    switch(kind){
+      case 'rect': return {k:'p',p:P([x0,y0,x1,y0,x1,y1,x0,y1])};
+      case 'trap': return {k:'p',p:P([x0+w*.18,y0,x1-w*.18,y0,x1,y1,x0,y1])};
+      case 'itrap': return {k:'p',p:P([x0,y0,x1,y0,x1-w*.18,y1,x0+w*.18,y1])};
+      case 'para': return {k:'p',p:P([x0+w*.22,y0,x1,y0,x1-w*.22,y1,x0,y1])};
+      case 'slant': return {k:'p',p:P([x0,y0,x1,y0,x1,y1-h*.25,x0,y1])};
+      case 'tri': return {k:'p',p:P([cx,y0,x1,y1,x0,y1])};
+      case 'cut': return {k:'p',p:P([x0,y0,x1,y0,x1,y0+h*.6,x0+w*.6,y1,x0,y1])};
+      case 'ellipse': return {k:'e',p:P([x0,y0,x1,y0,x1,y1,x0,y1])}; } }
+  function previewPanels(){ curctx.clearRect(0,0,CW,CH); if(tool.name!=='panel') return;
+    const p=tool.panel, ev={ shapes:pe.shapes, lw:p.lw, color:tool.color, outside:p.outside, op:1 };
+    if(pe.shapes.length){ curctx.save(); curctx.globalAlpha=0.85; renderPanels(curctx, ev, CW, CH); curctx.restore(); }   // コマが無いときは白いおおいを出さない(配置後に絵が隠れないように)
+    if(pe.drag && pe.drag.type==='place' && pe.drag.ghost){ curctx.save(); curctx.strokeStyle=tool.color; curctx.lineWidth=p.lw; curctx.setLineDash([8/zoom,6/zoom]); curctx.beginPath(); shapePath(curctx,pe.drag.ghost); curctx.stroke(); curctx.restore(); }
+    // ハンドル
+    const r=6/zoom; curctx.save(); curctx.lineWidth=1.5/zoom;
+    pe.shapes.forEach((sh,i)=>{ const on=i===pe.sel;
+      if(on){ curctx.strokeStyle='rgba(47,150,184,.95)'; curctx.setLineDash([5/zoom,4/zoom]); curctx.beginPath(); shapePath(curctx,sh); curctx.stroke(); curctx.setLineDash([]); }
+      if(pe.mode!=='edit') return;
+      for(let k=0;k<sh.p.length;k+=2){ curctx.fillStyle=on?'#2f96b8':'rgba(255,255,255,.95)'; curctx.strokeStyle='#2f96b8';
+        curctx.beginPath(); curctx.rect(sh.p[k]-r,sh.p[k+1]-r,r*2,r*2); curctx.fill(); curctx.stroke(); }
+      if(on && sh.k==='p'){ const n=sh.p.length/2; for(let k=0;k<n;k++){ const a=k*2, b=((k+1)%n)*2, mx=(sh.p[a]+sh.p[b])/2, my=(sh.p[a+1]+sh.p[b+1])/2;
+        curctx.fillStyle='rgba(255,255,255,.95)'; curctx.beginPath(); curctx.arc(mx,my,r*0.7,0,Math.PI*2); curctx.fill(); curctx.stroke(); } } });
+    curctx.restore();
+    document.getElementById('panelCount').textContent=pe.shapes.length?(pe.shapes.length+'コマ'+(pe.sel>=0?'・'+(pe.sel+1)+'番を選択中':'')):'コマがありません';
+    document.getElementById('panelDel').disabled=pe.sel<0; }
+  function ptInShape(sh,x,y){ const c=curctx; c.beginPath(); shapePath(c,sh); return c.isPointInPath(x*1,y*1); }
+  function snapPt(x,y,skipShape,skipIdx){ const lim=10/zoom; let best=null, bd=lim;
+    pe.shapes.forEach((sh,i)=>{ for(let k=0;k<sh.p.length;k+=2){ if(i===skipShape && k===skipIdx) continue; const d=Math.hypot(sh.p[k]-x,sh.p[k+1]-y); if(d<bd){ bd=d; best=[sh.p[k],sh.p[k+1]]; } } });
+    return best||[Math.round(x),Math.round(y)]; }
+  function panelDown(p, e){ pe.started=true; const r=8/zoom;
+    if(pe.mode==='edit'){
+      // 頂点 → 辺のまん中 → コマの中、の順に探す(選択中のコマを優先)
+      const order=pe.shapes.map((_,i)=>i).sort((a,b)=>(b===pe.sel)-(a===pe.sel));
+      for(const i of order){ const sh=pe.shapes[i]; for(let k=0;k<sh.p.length;k+=2){ if(Math.hypot(sh.p[k]-p.x,sh.p[k+1]-p.y)<=r){
+        if(e.altKey && sh.k==='p' && sh.p.length>6){ sh.p.splice(k,2); pe.sel=i; pe.dirty=true; previewPanels(); return; }   // Alt+クリックで頂点を消す
+        pe.sel=i; pe.drag={type:'vert',i,k}; previewPanels(); return; } } }
+      if(pe.sel>=0 && pe.shapes[pe.sel].k==='p'){ const sh=pe.shapes[pe.sel], n=sh.p.length/2;
+        for(let k=0;k<n;k++){ const a=k*2, b=((k+1)%n)*2, mx=(sh.p[a]+sh.p[b])/2, my=(sh.p[a+1]+sh.p[b+1])/2;
+          if(Math.hypot(mx-p.x,my-p.y)<=r){ sh.p.splice(a+2,0,Math.round(mx),Math.round(my)); pe.drag={type:'vert',i:pe.sel,k:a+2}; pe.dirty=true; previewPanels(); return; } } }
+      for(let i=pe.shapes.length-1;i>=0;i--){ if(ptInShape(pe.shapes[i],p.x,p.y)){ pe.sel=i; pe.drag={type:'move',i,sx:p.x,sy:p.y,orig:pe.shapes[i].p.slice()}; previewPanels(); return; } }
+      pe.sel=-1; previewPanels(); return; }
+    const [sx,sy]=snapPt(p.x,p.y,-1,-1); pe.drag={type:'place',x0:sx,y0:sy,ghost:null}; }
+  function panelMove(p, shift){ const d=pe.drag; if(!d) return;
+    if(d.type==='vert'){ const [x,y]=shift?[Math.round(p.x),Math.round(p.y)]:snapPt(p.x,p.y,d.i,d.k); const sh=pe.shapes[d.i]; sh.p[d.k]=x; sh.p[d.k+1]=y;
+      if(sh.k==='e'){ const n=sh.p.length; const ox=sh.p[(d.k+4)%n], oy=sh.p[(d.k+5)%n]; sh.p=[ox,oy,x,oy,x,y,ox,y].map(Math.round); d.k=4; }   // 楕円は向かいの角を固定して大きさを変える
+      pe.dirty=true; }
+    else if(d.type==='move'){ const dx=Math.round(p.x-d.sx), dy=Math.round(p.y-d.sy); const sh=pe.shapes[d.i]; for(let k=0;k<sh.p.length;k+=2){ sh.p[k]=d.orig[k]+dx; sh.p[k+1]=d.orig[k+1]+dy; } pe.dirty=true; }
+    else if(d.type==='place'){ let [x,y]=snapPt(p.x,p.y,-1,-1); if(shift){ const m=Math.max(Math.abs(x-d.x0),Math.abs(y-d.y0)); x=d.x0+Math.sign(x-d.x0||1)*m; y=d.y0+Math.sign(y-d.y0||1)*m; }
+      const x0=Math.min(d.x0,x), x1=Math.max(d.x0,x), y0=Math.min(d.y0,y), y1=Math.max(d.y0,y); d.ghost=(x1-x0>4&&y1-y0>4)?makeShape(pe.mode,x0,y0,x1,y1):null; }
+    previewPanels(); }
+  function panelUp(){ const d=pe.drag; pe.drag=null; if(!d) return;
+    if(d.type==='place'){ if(d.ghost && Math.abs(d.ghost.p[2]-d.ghost.p[0])+Math.abs(d.ghost.p[5]-d.ghost.p[1])>16){ pe.shapes.push(d.ghost); pe.sel=pe.shapes.length-1; pe.dirty=true; } else toast('ドラッグしてコマの大きさを決めてください'); }
+    previewPanels(); }
+  function setPanelMode(m){ pe.mode=m; document.querySelectorAll('#panelShapes button').forEach(b=>b.classList.toggle('active',b.dataset.k===m)); input.style.cursor=m==='edit'?'default':CROSSHAIR; previewPanels(); }
+  function deletePanel(){ if(pe.sel<0) return; pe.shapes.splice(pe.sel,1); pe.sel=-1; pe.dirty=true; previewPanels(); }
+  function panelEnter(){ if(!pe.started) panelTemplate(); else previewPanels(); setPanelMode(pe.mode); }
+  function applyPanels(){ endMoveSession(); if(!pe.shapes.length){ toast('配置するコマがありません'); return; }
+    const p=tool.panel, ev={ t:'panels', shapes:JSON.parse(JSON.stringify(pe.shapes.map(s=>({k:s.k,p:s.p})))), lw:p.lw, color:tool.color, outside:p.outside, op:1 };
+    const l=addLayer({name:'コマ枠'}); ev.lid=l.id; renderPanels(l.ctx, ev, CW, CH); recordEvent(ev); updateThumb(l); redraw(); pushHistory();
+    const n=ev.shapes.length; pe.shapes=[]; pe.sel=-1; pe.dirty=true; previewPanels();
+    toast('コマ割りを「コマ枠」レイヤーに配置しました('+n+'コマ)'); }
+
+  // 吹き出し: 形のパーツ(本体+しっぽ)を「太線で縁どり → 中を白で塗る」の順に重ねて、つなぎ目のないひとつの輪郭にする
+  function bubbleParts(ev){ const x0=Math.min(ev.x0,ev.x1), y0=Math.min(ev.y0,ev.y1), w=Math.abs(ev.x1-ev.x0), h=Math.abs(ev.y1-ev.y0);
+    const cx=x0+w/2, cy=y0+h/2, rx=w/2, ry=h/2, parts=[];
+    let s=(ev.seed||1)>>>0; const rnd=()=>{ s=(s*9301+49297)%233280; return s/233280; };
+    if(ev.shape==='ellipse') parts.push(c=>c.ellipse(cx,cy,Math.max(1,rx),Math.max(1,ry),0,0,Math.PI*2));
+    else if(ev.shape==='round'){ const r=Math.min(w,h)*0.28; parts.push(c=>{ c.roundRect ? c.roundRect(x0,y0,w,h,r) : c.rect(x0,y0,w,h); }); }
+    else if(ev.shape==='rect') parts.push(c=>c.rect(x0,y0,w,h));
+    else if(ev.shape==='spike'){ const per=Math.PI*(rx+ry), n=Math.max(10,Math.round(per/34))*2;
+      const pts=[]; for(let i=0;i<n;i++){ const a=i/n*Math.PI*2, k=(i%2===0)?(1.0+rnd()*0.18):(0.74+rnd()*0.06); pts.push([cx+Math.cos(a)*rx*k, cy+Math.sin(a)*ry*k]); }
+      parts.push(c=>{ c.moveTo(pts[0][0],pts[0][1]); for(const p of pts) c.lineTo(p[0],p[1]); c.closePath(); }); }
+    else if(ev.shape==='cloud'){ const per=Math.PI*(rx+ry), n=Math.max(7,Math.round(per/55)), br=per/n*0.62;
+      parts.push(c=>c.ellipse(cx,cy,Math.max(1,rx*0.86),Math.max(1,ry*0.86),0,0,Math.PI*2));
+      for(let i=0;i<n;i++){ const a=i/n*Math.PI*2+0.3, r=br*(0.85+rnd()*0.3); const px=cx+Math.cos(a)*rx*0.86, py=cy+Math.sin(a)*ry*0.86; parts.push(c=>c.arc(px,py,r,0,Math.PI*2)); } }
+    if(ev.tx!=null && w>2 && h>2){ const dx=ev.tx-cx, dy=ev.ty-cy, L=Math.hypot(dx,dy)||1;
+      if(ev.shape==='cloud'){   // 思考の吹き出しは小さな丸を3つ
+        const edge=Math.min(1, 1/Math.hypot(dx/(rx||1),dy/(ry||1))); const sx=cx+dx*edge, sy=cy+dy*edge, base=Math.min(rx,ry)*0.22;
+        [0.3,0.6,0.9].forEach((f,i)=>{ const px=sx+(ev.tx-sx)*f, py=sy+(ev.ty-sy)*f, r=Math.max(2,base*(1-i*0.3)); parts.push(c=>c.arc(px,py,r,0,Math.PI*2)); }); }
+      else { const bw=Math.max(6,Math.min(rx,ry)*0.45), nx=-dy/L*bw/2, ny=dx/L*bw/2;
+        const bx=cx+dx*0.35, by=cy+dy*0.35;   // 根元は本体の内側に置いて輪郭を自然につなぐ
+        parts.push(c=>{ c.moveTo(bx+nx,by+ny); c.lineTo(ev.tx,ev.ty); c.lineTo(bx-nx,by-ny); c.closePath(); }); } }
+    return parts; }
+  function renderBubble(ctx, ev, W, H){ const t=document.createElement('canvas'); t.width=W; t.height=H; const x=t.getContext('2d'), parts=bubbleParts(ev);
+    x.lineJoin='round'; x.strokeStyle=ev.color; x.lineWidth=ev.lw*2;
+    for(const p of parts){ x.beginPath(); p(x); x.stroke(); }
+    if(ev.fill==='none') x.globalCompositeOperation='destination-out'; x.fillStyle='#ffffff';
+    for(const p of parts){ x.beginPath(); p(x); x.fill(); }
+    ctx.save(); ctx.globalAlpha=(ev.op!=null?ev.op:1); ctx.drawImage(t,0,0); ctx.restore(); }
+  let bubbleDrag=null;   // {x0,y0,x1,y1,stage:'box'|'tail',tx,ty,seed}
+  function bubbleEvFrom(d){ const b=tool.bubble; return { t:'bubble', shape:b.shape, lw:b.lw, fill:b.fill, color:tool.color, op:tool.opacity,
+    x0:Math.round(d.x0), y0:Math.round(d.y0), x1:Math.round(d.x1), y1:Math.round(d.y1), tx:(d.tx!=null?Math.round(d.tx):null), ty:(d.ty!=null?Math.round(d.ty):null), seed:d.seed }; }
+  function previewBubble(){ curctx.clearRect(0,0,CW,CH); if(!bubbleDrag) return; renderBubble(curctx, bubbleEvFrom(bubbleDrag), CW, CH);
+    if(bubbleDrag.stage==='tail'){ curctx.save(); curctx.fillStyle='rgba(47,150,184,.95)'; curctx.beginPath(); curctx.arc(bubbleDrag.tx,bubbleDrag.ty,4/zoom,0,Math.PI*2); curctx.fill(); curctx.restore(); } }
+  function commitBubble(withTail){ const d=bubbleDrag; bubbleDrag=null; curctx.clearRect(0,0,CW,CH); if(!d) return;
+    if(!withTail){ d.tx=null; d.ty=null; }
+    const l=activeLayer(); if(!l||!l.visible){ toast(l?'レイヤーが非表示です':'レイヤーがありません'); return; }
+    const ev=bubbleEvFrom(d); ev.lid=l.id; renderBubble(l.ctx, ev, CW, CH); recordEvent(ev); updateThumb(l); redraw(); pushHistory(); toast('吹き出しを置きました。文字は文字ツールで入れられます'); }
+  function bubbleDown(p){ const l=activeLayer(); if(!l||!l.visible){ toast(l?'レイヤーが非表示です':'レイヤーがありません'); return; }
+    if(bubbleDrag && bubbleDrag.stage==='tail'){ bubbleDrag.tx=p.x; bubbleDrag.ty=p.y; commitBubble(true); return; }
+    bubbleDrag={ x0:p.x, y0:p.y, x1:p.x, y1:p.y, stage:'box', seed:(Math.random()*100000)|0 }; }
+  function bubbleMove(p, shift){ if(!bubbleDrag) return;
+    if(bubbleDrag.stage==='box'){ let dx=p.x-bubbleDrag.x0, dy=p.y-bubbleDrag.y0; if(shift){ const m=Math.max(Math.abs(dx),Math.abs(dy)); dx=Math.sign(dx||1)*m; dy=Math.sign(dy||1)*m; }
+      bubbleDrag.x1=bubbleDrag.x0+dx; bubbleDrag.y1=bubbleDrag.y0+dy; }
+    else { bubbleDrag.tx=p.x; bubbleDrag.ty=p.y; }
+    previewBubble(); }
+  function bubbleUp(){ if(!bubbleDrag||bubbleDrag.stage!=='box') return;
+    if(Math.abs(bubbleDrag.x1-bubbleDrag.x0)<8 || Math.abs(bubbleDrag.y1-bubbleDrag.y0)<8){ bubbleDrag=null; curctx.clearRect(0,0,CW,CH); toast('ドラッグして吹き出しの大きさを決めてください'); return; }
+    if(tool.bubble.tail && tool.bubble.shape!=='rect'){ bubbleDrag.stage='tail'; const cx=(bubbleDrag.x0+bubbleDrag.x1)/2, by=Math.max(bubbleDrag.y0,bubbleDrag.y1);
+      bubbleDrag.tx=cx; bubbleDrag.ty=by+40; previewBubble(); toast('しっぽの先をクリック(Escでしっぽなし)'); }
+    else commitBubble(false); }
+
+  // オプションのUI
+  function syncComicUI(){ const p=tool.panel, b=tool.bubble;
+    document.getElementById('panelPreset').value=p.preset; document.getElementById('panelCustomField').style.display=p.preset==='custom'?'flex':'none';
+    document.getElementById('panelCustom').value=p.custom;
+    [['panelMargin','margin',' px'],['panelGx','gx',' px'],['panelGy','gy',' px'],['panelLw','lw',' px']].forEach(([id,k,u])=>{ document.getElementById(id).value=p[k]; document.getElementById(id+'Val').textContent=p[k]+u; });
+    document.getElementById('panelOutside').classList.toggle('on',p.outside);
+    document.querySelectorAll('#bubbleShapes button').forEach(x=>x.classList.toggle('active',x.dataset.s===b.shape));
+    document.getElementById('bubbleLw').value=b.lw; document.getElementById('bubbleLwVal').textContent=b.lw+' px';
+    document.getElementById('bubbleFill').classList.toggle('on',b.fill==='white'); document.getElementById('bubbleTail').classList.toggle('on',b.tail); }
+  const tplChanged=()=>{ if(!pe.dirty) panelTemplate(); else previewPanels(); };   // まだ手を加えていなければ、その場で並べ直す
+  document.getElementById('panelPreset').addEventListener('change',e=>{ tool.panel.preset=e.target.value; syncComicUI(); tplChanged(); });
+  document.getElementById('panelCustom').addEventListener('input',e=>{ tool.panel.custom=e.target.value; tplChanged(); });
+  [['panelMargin','margin'],['panelGx','gx'],['panelGy','gy']].forEach(([id,k])=>document.getElementById(id).addEventListener('input',e=>{ tool.panel[k]=+e.target.value; syncComicUI(); tplChanged(); }));
+  document.getElementById('panelLw').addEventListener('input',e=>{ tool.panel.lw=+e.target.value; syncComicUI(); previewPanels(); });
+  document.getElementById('panelTemplate').addEventListener('click',()=>{ const go=()=>{ panelTemplate(); setPanelMode('edit'); };
+    if(pe.dirty && pe.shapes.length) askConfirm('今のコマを置きかえて並べ直しますか？','並べ直す',go); else go(); });
+  document.querySelectorAll('#panelShapes button').forEach(b=>b.addEventListener('click',()=>setPanelMode(b.dataset.k)));
+  document.getElementById('panelDel').addEventListener('click',deletePanel);
+  document.getElementById('panelClearAll').addEventListener('click',()=>{ if(!pe.shapes.length) return; pe.shapes=[]; pe.sel=-1; pe.dirty=true; previewPanels(); });
+  window.addEventListener('keydown',e=>{ if(tool.name!=='panel'||e.target.tagName==='INPUT') return;
+    if((e.key==='Delete'||e.key==='Backspace') && pe.sel>=0){ e.preventDefault(); e.stopImmediatePropagation(); deletePanel(); }
+    else if(e.key==='Escape' && pe.sel>=0){ e.stopImmediatePropagation(); pe.sel=-1; previewPanels(); } }, true);
+  document.getElementById('panelOutside').addEventListener('click',()=>{ tool.panel.outside=!tool.panel.outside; syncComicUI(); previewPanels(); });
+  document.getElementById('panelApply').addEventListener('click',applyPanels);
+  document.querySelectorAll('#bubbleShapes button').forEach(x=>x.addEventListener('click',()=>{ tool.bubble.shape=x.dataset.s; syncComicUI(); if(bubbleDrag) previewBubble(); }));
+  document.getElementById('bubbleLw').addEventListener('input',e=>{ tool.bubble.lw=+e.target.value; syncComicUI(); if(bubbleDrag) previewBubble(); });
+  document.getElementById('bubbleFill').addEventListener('click',()=>{ tool.bubble.fill=tool.bubble.fill==='white'?'none':'white'; syncComicUI(); if(bubbleDrag) previewBubble(); });
+  document.getElementById('bubbleTail').addEventListener('click',()=>{ tool.bubble.tail=!tool.bubble.tail; syncComicUI(); });
+  window.addEventListener('keydown',e=>{ if(bubbleDrag && bubbleDrag.stage==='tail' && (e.key==='Escape'||e.key==='Enter')){ e.preventDefault(); e.stopImmediatePropagation(); commitBubble(e.key==='Enter'); } }, true);
+  syncComicUI();
 
   // ---------- init ----------
   function init(){
