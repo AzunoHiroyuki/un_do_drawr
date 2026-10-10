@@ -265,6 +265,34 @@
   .flt-hint { font-size: 11px; line-height: 1.5; color: var(--ink-soft); }
   .flt-scale { display: flex; justify-content: space-between; font-size: 10.5px; font-weight: 700; color: var(--ink-soft); margin-top: -2px; }
 
+  /* マイフォント */
+  .mf-box { width: 860px; max-width: 96vw; max-height: 94vh; overflow: auto; align-self: flex-start; margin-top: 2vh; }   /* 上に固定して、中身が増減しても描くマスが動かないように */
+  .mf-body { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+  .mf-left { flex: 1; min-width: 280px; display: flex; flex-direction: column; gap: 8px; }
+  .mf-tabs { display: flex; gap: 4px; }
+  .mf-tabs button { flex: 1; height: 30px; border: 1px solid var(--line-strong); background: var(--panel-2); color: var(--ink); border-radius: 7px; font-weight: 800; font-size: 12.5px; cursor: pointer; }
+  .mf-tabs button.active { background: var(--accent); color: #fff; border-color: var(--accent-deep); }
+  .mf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(42px, 1fr)); gap: 4px; max-height: 330px; overflow-y: auto; padding: 2px; }
+  .mf-cell { position: relative; aspect-ratio: 1; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); cursor: pointer; padding: 0; overflow: hidden; }
+  .mf-cell canvas { position: absolute; inset: 3px; width: calc(100% - 6px); height: calc(100% - 6px); }
+  .mf-cell span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; color: var(--ink-soft); opacity: .55; }
+  .mf-cell.has span { inset: auto 2px 1px auto; font-size: 9px; opacity: .8; }
+  .mf-cell.has { background: var(--panel); border-color: var(--line-strong); }
+  .mf-cell.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+  .mf-right { width: 340px; display: flex; flex-direction: column; gap: 8px; }
+  .mf-head { display: flex; align-items: center; gap: 6px; }
+  .mf-char { flex: 1; text-align: center; font-size: 26px; font-weight: 800; color: var(--ink); }
+  #mfCanvas { width: 340px; height: 340px; border: 1px solid var(--line-strong); border-radius: 8px; touch-action: none; cursor: crosshair; background: #fff; }
+  .mf-tools { display: flex; gap: 6px; flex-wrap: wrap; }
+  .mf-test { display: flex; flex-direction: column; gap: 6px; }
+  #mfTestCanvas { width: 100%; height: 70px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  #confirmModal { z-index: 240; }   /* マイフォント画面の上にも出す */
+  .mf-reset { display: flex; gap: 6px; flex-wrap: wrap; }
+  .mf-reset .head-btn { height: 28px; padding: 0 10px; font-size: 11.5px; }
+  .mf-reset .head-btn.danger { color: #c9483a; border-color: #e3b1aa; }
+  .mf-reset .head-btn.danger:hover { background: #fbeceb; }
+  .mf-progress { font-size: 11.5px; font-weight: 700; color: var(--ink-soft); }
+
   .mobile-toggle { display: none; }
   @media (max-width: 860px) {
     .options { position: absolute; left: 62px; top: 0; bottom: 0; z-index: 25; box-shadow: 6px 0 18px rgba(0,0,0,.15); transform: translateX(-110%); transition: transform .2s; }
@@ -317,6 +345,9 @@
     </button>
     <button class="tool" data-tool="marker" title="マーカー (M)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M6 16l4-11 6 2-4 11-6-2z"/><path d="M9 5l6 2"/></svg><span>マーカー</span>
+    </button>
+    <button class="tool" data-tool="fukuro" title="袋文字ペン (F)">
+      <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M5 18c2-9 5-12 7-6s5 3 7-6" stroke="currentColor" stroke-width="6"/><path d="M5 18c2-9 5-12 7-6s5 3 7-6" stroke="#fff" stroke-width="2.2"/></svg><span>袋文字</span>
     </button>
     <button class="tool" data-tool="sparkle" title="キラキラ (K)">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c.4 3.8 2 5.4 5.8 5.8C14 8.2 12.4 9.8 12 13.6 11.6 9.8 10 8.2 6.2 7.8 10 7.4 11.6 5.8 12 2z"/><path d="M18.5 13c.2 1.9 1 2.7 2.9 2.9-1.9.2-2.7 1-2.9 2.9-.2-1.9-1-2.7-2.9-2.9 1.9-.2 2.7-1 2.9-2.9z"/></svg><span>キラキラ</span>
@@ -389,9 +420,11 @@
           <option value="serif">明朝</option>
           <option value="'Hiragino Maru Gothic ProN', sans-serif">丸ゴシック</option>
           <option value="'Courier New', monospace">等幅</option>
+          <option value="__myfont__">マイフォント(手書き)</option>
         </select>
         <input type="text" class="hex" id="txtFontCustom" placeholder="フォント名を直接入力(例: 游明朝)" style="text-transform:none;text-align:left;margin-top:6px;padding:0 6px;">
         <button class="head-btn" id="txtFontLoad" style="width:100%;justify-content:center;margin-top:6px;">PCのフォント一覧から選ぶ</button>
+        <button class="head-btn" id="mfOpen" style="width:100%;justify-content:center;margin-top:6px;" title="アルファベットとひらがなを自分で描いてフォントにする">マイフォントを作る・編集</button>
       </div>
       <div class="field">
         <div class="field-row"><label>文字サイズ</label><span class="val" id="txtSizeVal">36 px</span></div>
@@ -563,6 +596,23 @@
         <input type="range" id="sparkleSpike" min="0" max="100" value="70">
       </div>
       <div class="layer-hint" style="padding:0;">大きさは「ふとさ」で調整。単発はクリックした位置に1個だけ置きます。</div>
+    </div>
+
+    <div class="field" id="fukuroOptions" style="display:none;">
+      <div class="opt-title">袋文字ペン</div>
+      <div class="field">
+        <div class="field-row"><label>ふちの太さ</label><span class="val" id="fukuroOwVal">4 px</span></div>
+        <input type="range" id="fukuroOw" min="1" max="40" value="4">
+      </div>
+      <div class="field" id="fukuroIcField">
+        <div class="field-row"><label>中の色</label></div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <input type="color" id="fukuroIc" value="#ffffff" style="flex:1;height:26px;border:1px solid var(--line-strong);border-radius:6px;background:var(--panel);cursor:pointer;">
+          <button class="head-btn" id="fukuroSwap" title="ふちの色(いろ)と中の色を入れ替える" style="height:28px;padding:0 8px;font-size:11.5px;">入れ替え</button>
+        </div>
+      </div>
+      <button class="toggle-btn" id="fukuroHollow" title="中を塗らずに透明にする(下の絵が透けます)">中を透明にする(中抜き)</button>
+      <div class="layer-hint" style="padding:0;">ふちの色は「いろ」、中の線の太さは「ふとさ」で決まります。線が重なった所は中がつながります。</div>
     </div>
 
     <div class="field" id="radialOptions" style="display:none;">
@@ -805,6 +855,56 @@
   </div>
 </div>
 
+<div class="modal" id="mfModal">
+  <div class="modal-box mf-box">
+    <div class="opt-title" style="font-size:14px;color:var(--ink);">マイフォント(手書きフォント・仮実装)</div>
+    <div class="mf-body">
+      <div class="mf-left">
+        <div class="mf-tabs" id="mfTabs"><button data-set="upper">ABC</button><button data-set="lower">abc</button><button data-set="hira">あいう</button></div>
+        <div class="mf-grid" id="mfGrid"></div>
+        <div class="mf-progress" id="mfProgress"></div>
+        <div class="mf-reset">
+          <button class="head-btn danger" id="mfResetGroup" title="今開いているグループの文字をすべて消す">このグループをリセット</button>
+          <button class="head-btn danger" id="mfResetAll" title="マイフォントの文字をすべて消す">全部リセット</button>
+          <button class="head-btn" id="mfResetUndo" style="display:none;" title="直前のリセットを取り消す">リセットを取り消す</button>
+        </div>
+        <div class="mf-test">
+          <div class="field-row"><label style="font-size:12px;font-weight:700;">ためし書き</label></div>
+          <input type="text" class="hex" id="mfTestText" value="Hello あいうえお" style="text-transform:none;text-align:left;padding:0 6px;">
+          <canvas id="mfTestCanvas" width="1000" height="140"></canvas>
+        </div>
+      </div>
+      <div class="mf-right">
+        <div class="mf-head">
+          <button class="lt-btn" id="mfPrev" title="前の文字 (←)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+          <div class="mf-char" id="mfChar">A</div>
+          <button class="lt-btn" id="mfNext" title="次の文字 (→)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>
+        </div>
+        <canvas id="mfCanvas" width="680" height="680"></canvas>
+        <div class="shape-row" id="mfToolBtns" style="display:grid;grid-template-columns:repeat(3,1fr);">
+          <button class="shape-btn active" data-t="round" title="丸ペン"><span>●</span>丸ペン</button>
+          <button class="shape-btn" data-t="flat" title="平ペン(角度を固定したペン先。向きで太さが変わる)"><span>▬</span>平ペン</button>
+          <button class="shape-btn" data-t="fill" title="線で囲まれた内側をクリックして塗る"><span>◆</span>塗りつぶし</button>
+        </div>
+        <div class="field" id="mfPenField"><div class="field-row"><label>線の太さ</label><span class="val" id="mfPenVal">70</span></div><input type="range" id="mfPen" min="15" max="180" value="70"></div>
+        <div class="field" id="mfAngleField" style="display:none;"><div class="field-row"><label>ペン先の角度</label><span class="val" id="mfAngleVal">35&deg;</span></div><input type="range" id="mfAngle" min="-90" max="90" value="35"></div>
+        <div class="mf-tools">
+          <button class="head-btn" id="mfUndo" title="最後の1画(塗りつぶしも1回分)を消す (Ctrl+Z)">1画もどす</button>
+          <button class="head-btn" id="mfClear">この文字を消す</button>
+          <button class="chip on" id="mfGuide" title="お手本の文字を薄く表示">お手本</button>
+        </div>
+      </div>
+    </div>
+    <div class="rz-note">描いた文字は自動でこのブラウザに保存されます。別のPCやブラウザで使うときは「ファイルに保存」してください。描いていない文字(濁音など)は普通のフォントで表示されます。</div>
+    <div class="rz-actions">
+      <button class="head-btn" id="mfImport">ファイルを開く</button>
+      <button class="head-btn" id="mfExport">ファイルに保存</button>
+      <button class="head-btn primary" id="mfClose">閉じる</button>
+    </div>
+    <input type="file" id="mfFile" accept=".json,application/json" style="display:none;">
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -842,7 +942,8 @@
     selTol:32, fillRef:'composite', wandAdd:false, selMode:'wand', fillPattern:{type:'solid', scale:12},
     grad:{shape:'linear', style:'smooth', cell:8, endType:'transparent', color2:'#ffffff', dotShape:'dot', htMode:'normal', round:0, arm:0.35},
     sparkle:{density:1, single:true, size:100, spike:0.3},
-    burst:{count:64, inner:0.3, width:1.5, lenVar:0.4, tt:0, ttLen:0.45} };
+    burst:{count:64, inner:0.3, width:1.5, lenVar:0.4, tt:0, ttLen:0.45},
+    fukuro:{ic:'#ffffff', ow:4, hollow:false} };
   let selection = null;   // { mask:Uint8Array(CW*CH), edges:[[x,y]...] }
   let selDrag = null;     // 四角/投げ縄でドラッグ中の情報
   let gradDrag = null;    // グラデーションのドラッグ情報
@@ -852,7 +953,7 @@
   let pendingText = null;  // 文字入力中の配置情報 { layout, x, y, pts }
 
   // 2値化: 指定領域のアルファを閾値でオン/オフに(アンチエイリアスの縁を消す)
-  const BIN_TOOLS=['pen','pencil','marker','eraser'];
+  const BIN_TOOLS=['pen','pencil','marker','eraser','fukuro'];
   function thresholdRegion(ctx, x, y, w, h, thr){
     x=Math.max(0,Math.floor(x)); y=Math.max(0,Math.floor(y));
     w=Math.min(CW-x,Math.ceil(w)); h=Math.min(CH-y,Math.ceil(h));
@@ -891,8 +992,25 @@
     ctx.restore();
   }
 
+  // 袋文字: ふち(太い線)と中(細い線)を別々にためて、毎回 ふち→中 の順に重ねる。重なった所は中がつながる。
+  function fkBegin(ctx,w,h){ const mk=()=>{ const c=document.createElement('canvas'); c.width=w; c.height=h; return c; }; ctx._fk={ o:mk(), i:mk(), w, h }; }
+  function fukuroSeg(ctx, color, size, a, b, opt){
+    let st=ctx._fk; if(!st||st.w!==ctx.canvas.width||st.h!==ctx.canvas.height){ fkBegin(ctx,ctx.canvas.width,ctx.canvas.height); st=ctx._fk; }
+    const ow=Math.max(0,(opt.ow!=null?opt.ow:4)), ox=st.o.getContext('2d'), ix=st.i.getContext('2d');
+    ox.strokeStyle=color; seg(ox,a,b,size+ow*2);
+    ix.strokeStyle=opt.hollow?'#000000':(opt.ic||'#ffffff'); seg(ix,a,b,Math.max(0.5,size));
+    const pad=size/2+ow+3, x0=Math.max(0,Math.floor(Math.min(a.x,b.x)-pad)), y0=Math.max(0,Math.floor(Math.min(a.y,b.y)-pad));
+    const x1=Math.min(st.w,Math.ceil(Math.max(a.x,b.x)+pad)), y1=Math.min(st.h,Math.ceil(Math.max(a.y,b.y)+pad)), bw=x1-x0, bh=y1-y0;
+    if(bw<=0||bh<=0) return;
+    if(opt.binary){ thresholdRegion(ox,x0,y0,bw,bh); thresholdRegion(ix,x0,y0,bw,bh); }
+    ctx.save(); ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over';
+    ctx.clearRect(x0,y0,bw,bh); ctx.drawImage(st.o,x0,y0,bw,bh,x0,y0,bw,bh);
+    ctx.globalCompositeOperation=opt.hollow?'destination-out':'source-over'; ctx.drawImage(st.i,x0,y0,bw,bh,x0,y0,bw,bh);
+    ctx.restore(); }
+
   // draw ONE segment of a stroke onto a wet canvas (full alpha), by tool
-  function wetSeg(ctx, tname, color, size, a, b, shape, angle){
+  function wetSeg(ctx, tname, color, size, a, b, shape, angle, opt){
+    if(tname==='fukuro'){ fukuroSeg(ctx,color,size,a,b,opt||{}); return; }
     ctx.strokeStyle=color; ctx.fillStyle=color;
     if(shape==='flat'){
       if(tname==='pencil'){ flatSeg(ctx,color,Math.max(1,size*0.7),a,b,angle,0.4); }
@@ -1103,7 +1221,7 @@
   let drawing=false, lastP=null, smoothP=null, panning=false, panStart=null, scrollStart=null, airTimer=null, airPos=null, airSeed=1, moving=null, spaceDown=false, moveSess=null;
 
   function getPos(e){ const r=input.getBoundingClientRect(); return { x:(e.clientX-r.left)/zoom, y:(e.clientY-r.top)/zoom }; }
-  const isDrawTool = n => ['pen','pencil','brush','airbrush','marker','eraser','sparkle'].includes(n);
+  const isDrawTool = n => ['pen','pencil','brush','airbrush','marker','fukuro','eraser','sparkle'].includes(n);
 
   function pointerDown(e){
     if(anim.playing){ stopAnim(); return; }   // 再生中にキャンバスを触ったら停止して編集へ
@@ -1155,12 +1273,13 @@
     const binOn = tool.binary && BIN_TOOLS.includes(tool.name);
     curStroke={ t:'st', lid:l.id, tool:tool.name, color:tool.color, size:tool.size, op:tool.opacity, seed:airSeed,
       shape:tool.shape, angle:tool.angle, binary:binOn, pts:[Math.round(p.x*2)/2,Math.round(p.y*2)/2] };
+    if(tool.name==='fukuro'){ curStroke.ic=tool.fukuro.ic; curStroke.ow=tool.fukuro.ow; curStroke.hollow=tool.fukuro.hollow; curStroke.shape='round'; fkBegin(wctx,CW,CH); }
 
     if(tool.name==='airbrush'){ airPos=p; airStampInto(wctx,tool.color,tool.size,p,airSeed); airSeed++; 
       airTimer=setInterval(()=>{ if(airPos){ airStampInto(wctx,tool.color,tool.size,airPos,airSeed++); previewComposite(); } },45);
     } else if(tool.name==='sparkle'){ curStroke.density=tool.sparkle.density; curStroke.single=tool.sparkle.single; curStroke.size=tool.sparkle.size; curStroke.spike=tool.sparkle.spike;
       sparklePaint(wctx,tool.color,tool.sparkle.size,p,curStroke.seed+0,curStroke.density,curStroke.single,curStroke.spike);
-    } else { wctx.strokeStyle=tool.color; wctx.fillStyle=tool.color; wetSeg(wctx,tool.name,tool.color,tool.size,p,{x:p.x+0.01,y:p.y},tool.shape,tool.angle);
+    } else { wctx.strokeStyle=tool.color; wctx.fillStyle=tool.color; wetSeg(wctx,tool.name,tool.color,tool.size,p,{x:p.x+0.01,y:p.y},tool.shape,tool.angle,curStroke);
       if(binOn){ const bb=segBBox(p,p,tool.size); thresholdRegion(wctx,bb.x,bb.y,bb.w,bb.h); } }
     previewComposite();
   }
@@ -1204,7 +1323,7 @@
         sparklePaint(wctx,tool.color,tool.sparkle.size,np,curStroke.seed+k,curStroke.density,false,curStroke.spike); previewComposite(); } return; }
     if(dist<1.2) return;
     wctx.strokeStyle=tool.color; wctx.fillStyle=tool.color;
-    wetSeg(wctx,tool.name,tool.color,tool.size,lastP,np,tool.shape,tool.angle);
+    wetSeg(wctx,tool.name,tool.color,tool.size,lastP,np,tool.shape,tool.angle,curStroke);
     if(curStroke.binary){ const bb=segBBox(lastP,np,tool.size); thresholdRegion(wctx,bb.x,bb.y,bb.w,bb.h); }
     lastP=np; curStroke.pts.push(Math.round(np.x*2)/2,Math.round(np.y*2)/2);
     previewComposite();
@@ -1402,7 +1521,7 @@
 
   // ---------- text rendering (shared: editor & playback) ----------
   function fontFamilyCss(fam){ fam=(fam||'sans-serif').trim(); if(!/["',]/.test(fam) && /[^\x00-\x7F]|\s/.test(fam)) return '"'+fam+'"'; return fam; }
-  function applyTextFont(ctx, ev){ ctx.font=(ev.bold?'bold ':'')+ev.size+'px '+fontFamilyCss(ev.font); ctx.fillStyle=ev.color; }
+  function applyTextFont(ctx, ev){ ctx.font=(ev.bold?'bold ':'')+ev.size+'px '+(ev.font==='__myfont__'?'sans-serif':fontFamilyCss(ev.font)); ctx.fillStyle=ev.color; }
   function renderTextEvent(ctx, ev){
     ctx.save();
     ctx.globalAlpha=(ev.op!=null?ev.op:1);
@@ -1411,12 +1530,12 @@
       ctx.textAlign='center'; ctx.textBaseline='middle';
       let ang=(ev.startDeg||0)*Math.PI/180; const r=ev.radius||120, dir=ev.dir||1, side=ev.side||'out';
       for(const ch of [...ev.text]){
-        const w=ctx.measureText(ch).width; const step=w/r;
+        const w=ev.mf?mfCharWidth(ctx,ev,ch):ctx.measureText(ch).width; const step=w/r;
         const a=ang+dir*step/2;
         const x=ev.x+Math.cos(a)*r, y=ev.y+Math.sin(a)*r;
         ctx.save(); ctx.translate(x,y);
         ctx.rotate(side==='out' ? a+dir*Math.PI/2 : a-dir*Math.PI/2);
-        ctx.fillText(ch,0,0); ctx.restore();
+        if(ev.mf) mfDrawChar(ctx,ev,ch,0,0,'center','middle'); else ctx.fillText(ch,0,0); ctx.restore();
         ang+=dir*step;
       }
     } else if(ev.layout==='path' && ev.pts && ev.pts.length>=4){
@@ -1427,11 +1546,12 @@
       const at=d=>{ for(const s of seg){ if(d<=s.acc+s.L || s===seg[seg.length-1]){ const t=s.L?(d-s.acc)/s.L:0, a=pts[s.i-1],b=pts[s.i];
         return {x:a[0]+(b[0]-a[0])*t, y:a[1]+(b[1]-a[1])*t, ang:Math.atan2(b[1]-a[1],b[0]-a[0])}; } } return {x:pts[0][0],y:pts[0][1],ang:0}; };
       let d=0;
-      for(const ch of [...ev.text]){ const w=ctx.measureText(ch).width; if(d>total)break; const p=at(d+w/2);
-        ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.ang); ctx.fillText(ch,0,0); ctx.restore(); d+=w; }
+      for(const ch of [...ev.text]){ const w=ev.mf?mfCharWidth(ctx,ev,ch):ctx.measureText(ch).width; if(d>total)break; const p=at(d+w/2);
+        ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.ang); if(ev.mf) mfDrawChar(ctx,ev,ch,0,0,'center','middle'); else ctx.fillText(ch,0,0); ctx.restore(); d+=w; }
     } else {
       ctx.textAlign='left'; ctx.textBaseline='alphabetic';
-      ctx.fillText(ev.text, ev.x, ev.y);
+      if(ev.mf){ let x=ev.x; for(const ch of [...ev.text]){ mfDrawChar(ctx,ev,ch,x,ev.y,'left','alphabetic'); x+=mfCharWidth(ctx,ev,ch); } }
+      else ctx.fillText(ev.text, ev.x, ev.y);
     }
     ctx.restore();
   }
@@ -1466,7 +1586,8 @@
   function currentTextEv(text, pos){
     return { t:'text', text, layout:pendingText.layout, x:pendingText.x, y:pendingText.y, pts:pendingText.pts,
       font:tool.text.font, size:tool.text.size, bold:tool.text.bold, color:tool.color, op:tool.opacity,
-      radius:tool.text.radius, startDeg:tool.text.startDeg, dir:tool.text.dir, side:tool.text.side };
+      radius:tool.text.radius, startDeg:tool.text.startDeg, dir:tool.text.dir, side:tool.text.side,
+      mf:(tool.text.font==='__myfont__' ? mfPick(text) : undefined) };
   }
   function textPreview(){
     curctx.clearRect(0,0,CW,CH);
@@ -1849,19 +1970,19 @@
     else if(ev.t==='maskclear'){ endActiveStroke(); const l=playLayer(ev.lid); if(l&&ev.rle){ const mc=maskCanvasOf(decodeRLE(ev.rle)); l.ctx.save(); l.ctx.globalCompositeOperation='destination-out'; l.ctx.drawImage(mc,0,0); l.ctx.restore(); } }
     else if(ev.t==='st'){
       if(atom.k===0){ endActiveStroke(); play.active={lid:ev.lid,op:ev.op,tool:ev.tool,color:ev.color,size:ev.size,seed:ev.seed||1};
-        play.stctx.clearRect(0,0,play.pw,play.ph);
+        play.stctx.clearRect(0,0,play.pw,play.ph); if(ev.tool==='fukuro') fkBegin(play.stctx,play.pw,play.ph);
         const p={x:ev.pts[0],y:ev.pts[1]};
         play.stctx.strokeStyle=ev.color; play.stctx.fillStyle=ev.color;
         if(ev.tool==='airbrush') airStampInto(play.stctx,ev.color,ev.size,p,(ev.seed||1));
         else if(ev.tool==='sparkle') sparklePaint(play.stctx,ev.color,ev.size,p,(ev.seed||1)+0,ev.density,ev.single,ev.spike);
-        else { wetSeg(play.stctx,ev.tool,ev.color,ev.size,p,{x:p.x+0.01,y:p.y},ev.shape,ev.angle);
+        else { wetSeg(play.stctx,ev.tool,ev.color,ev.size,p,{x:p.x+0.01,y:p.y},ev.shape,ev.angle,ev);
           if(ev.binary){ const bb=segBBox(p,p,ev.size); thresholdRegion(play.stctx,bb.x,bb.y,bb.w,bb.h); } }
       } else {
         const a={x:ev.pts[(atom.k-1)*2],y:ev.pts[(atom.k-1)*2+1]}, b={x:ev.pts[atom.k*2],y:ev.pts[atom.k*2+1]};
         play.stctx.strokeStyle=ev.color; play.stctx.fillStyle=ev.color;
         if(ev.tool==='airbrush') airStampInto(play.stctx,ev.color,ev.size,b,(ev.seed||1)+atom.k);
         else if(ev.tool==='sparkle') sparklePaint(play.stctx,ev.color,ev.size,b,(ev.seed||1)+atom.k,ev.density,ev.single,ev.spike);
-        else { wetSeg(play.stctx,ev.tool,ev.color,ev.size,a,b,ev.shape,ev.angle);
+        else { wetSeg(play.stctx,ev.tool,ev.color,ev.size,a,b,ev.shape,ev.angle,ev);
           if(ev.binary){ const bb=segBBox(a,b,ev.size); thresholdRegion(play.stctx,bb.x,bb.y,bb.w,bb.h); } }
       }
       // if last point of stroke, flatten
@@ -1978,11 +2099,11 @@
       else if(ev.t==='burst'){ renderBurst(l.ctx, ev, CW, CH, curSel); }
       else if(ev.t==='maskfill'){ if(ev.rle){ const mc=maskCanvasOf(decodeRLE(ev.rle)); const t=document.createElement('canvas'); t.width=CW;t.height=CH; const tx=t.getContext('2d'); tx.fillStyle=ev.color; tx.globalAlpha=(ev.op!=null?ev.op:1); tx.fillRect(0,0,CW,CH); tx.globalAlpha=1; tx.globalCompositeOperation='destination-in'; tx.drawImage(mc,0,0); l.ctx.drawImage(t,0,0); } }
       else if(ev.t==='maskclear'){ if(ev.rle){ const mc=maskCanvasOf(decodeRLE(ev.rle)); l.ctx.save(); l.ctx.globalCompositeOperation='destination-out'; l.ctx.drawImage(mc,0,0); l.ctx.restore(); } }
-      else if(ev.t==='st'){ stc.clearRect(0,0,CW,CH); stc.strokeStyle=ev.color; stc.fillStyle=ev.color; const n=ev.pts.length/2;
+      else if(ev.t==='st'){ stc.clearRect(0,0,CW,CH); if(ev.tool==='fukuro') fkBegin(stc,CW,CH); stc.strokeStyle=ev.color; stc.fillStyle=ev.color; const n=ev.pts.length/2;
         if(ev.tool==='airbrush'){ for(let k=0;k<n;k++) airStampInto(stc,ev.color,ev.size,{x:ev.pts[k*2],y:ev.pts[k*2+1]},(ev.seed||1)+k); }
         else if(ev.tool==='sparkle'){ for(let k=0;k<n;k++) sparklePaint(stc,ev.color,ev.size,{x:ev.pts[k*2],y:ev.pts[k*2+1]},(ev.seed||1)+k,ev.density,ev.single,ev.spike); }
-        else { if(n===1){ wetSeg(stc,ev.tool,ev.color,ev.size,{x:ev.pts[0],y:ev.pts[1]},{x:ev.pts[0]+0.01,y:ev.pts[1]},ev.shape,ev.angle); }
-          for(let k=1;k<n;k++) wetSeg(stc,ev.tool,ev.color,ev.size,{x:ev.pts[(k-1)*2],y:ev.pts[(k-1)*2+1]},{x:ev.pts[k*2],y:ev.pts[k*2+1]},ev.shape,ev.angle);
+        else { if(n===1){ wetSeg(stc,ev.tool,ev.color,ev.size,{x:ev.pts[0],y:ev.pts[1]},{x:ev.pts[0]+0.01,y:ev.pts[1]},ev.shape,ev.angle,ev); }
+          for(let k=1;k<n;k++) wetSeg(stc,ev.tool,ev.color,ev.size,{x:ev.pts[(k-1)*2],y:ev.pts[(k-1)*2+1]},{x:ev.pts[k*2],y:ev.pts[k*2+1]},ev.shape,ev.angle,ev);
           if(ev.binary) thresholdRegion(stc,0,0,CW,CH); }
         l.ctx.save(); l.ctx.globalAlpha=ev.op; l.ctx.globalCompositeOperation=(ev.tool==='eraser')?'destination-out':'source-over'; l.ctx.drawImage(clipSrc(strokeTmp),0,0); l.ctx.restore();
       }
@@ -2031,6 +2152,7 @@
     document.getElementById('gradOptions').style.display = (name==='gradient')?'flex':'none';
     document.getElementById('sparkleOptions').style.display = (name==='sparkle')?'flex':'none';
     document.getElementById('radialOptions').style.display = (name==='radial')?'flex':'none';
+    document.getElementById('fukuroOptions').style.display = (name==='fukuro')?'flex':'none';
     if(name!=='radial') radialDrag=null;
     if(name==='wand'){ document.getElementById('wandTolField').style.display=(tool.selMode==='wand')?'flex':'none'; }
     else { selDrag=null; }
@@ -2053,16 +2175,34 @@
   document.getElementById('txtFontCustom').addEventListener('input',e=>{ const cf=e.target.value.trim(); tool.text.font = cf || document.getElementById('txtFont').value; textPreview(); });
   document.getElementById('txtFontLoad').addEventListener('click',async ()=>{
     if(!window.queryLocalFonts){ toast('この環境では一覧取得に非対応。フォント名を直接入力してください'); return; }
+    const btn=document.getElementById('txtFontLoad'); if(btn.disabled) return; const label=btn.textContent;
     try{ const fonts=await window.queryLocalFonts();
-      const fams=[...new Set(fonts.map(f=>f.family))].sort();
+      // 書体ごとに1つ代表を選ぶ(なるべく標準の太さ)
+      const byFam=new Map();
+      for(const f of fonts){ const cur=byFam.get(f.family); const reg=/^(regular|normal|book|roman|w3|r)$/i.test(f.style||'');
+        if(!cur || (reg && !cur.reg)) byFam.set(f.family,{fd:f,reg}); }
+      const fams=[...byFam.keys()];
       if(!fams.length){ toast('フォントが取得できませんでした'); return; }
-      const sel=document.getElementById('txtFont');
+      // 日本語名を調べる(結果はこのブラウザに覚えておき、次回からすぐ出す)
+      let cache={}; try{ cache=JSON.parse(localStorage.getItem('drawr_fontJpNames')||'{}')||{}; }catch(e){}
+      const todo=fams.filter(f=>!(f in cache)); let done=0; btn.disabled=true;
+      const worker=async()=>{ while(todo.length){ const fam=todo.shift();
+        try{ cache[fam]=await fontJpName(byFam.get(fam).fd); }catch(e){ cache[fam]=null; }
+        done++; if(done%5===0) btn.textContent='日本語名を調べています '+done+'/'+(done+todo.length); } };
+      await Promise.all(Array.from({length:6},worker));
+      try{ localStorage.setItem('drawr_fontJpNames',JSON.stringify(cache)); }catch(e){}
+      const sel=document.getElementById('txtFont'); const keep=sel.value;
       [...sel.querySelectorAll('optgroup[data-local]')].forEach(o=>o.remove());
-      const grp=document.createElement('optgroup'); grp.label='PCのフォント'; grp.setAttribute('data-local','1');
-      fams.forEach(f=>{ const o=document.createElement('option'); o.value=f; o.textContent=f; grp.appendChild(o); });
-      sel.appendChild(grp);
-      toast(fams.length+'個のフォントを読み込みました');
-    }catch(err){ toast('フォントの読み込みが許可されませんでした'); }
+      const jp=fams.filter(f=>cache[f]).sort((a,b)=>cache[a].localeCompare(cache[b],'ja'));
+      const other=fams.filter(f=>!cache[f]).sort((a,b)=>a.localeCompare(b));
+      const mkGroup=(title,list,useJp)=>{ if(!list.length) return; const grp=document.createElement('optgroup'); grp.label=title; grp.setAttribute('data-local','1');
+        list.forEach(f=>{ const o=document.createElement('option'); o.value=f; o.textContent=useJp?cache[f]:f; o.title=f;
+          o.style.fontFamily=fontFamilyCss(f); grp.appendChild(o); }); sel.appendChild(grp); };
+      mkGroup('PCのフォント(日本語)',jp,true); mkGroup('PCのフォント',other,false);
+      if([...sel.options].some(o=>o.value===keep)) sel.value=keep;
+      toast(fams.length+'個のフォントを読み込みました'+(jp.length?'(日本語名 '+jp.length+'個)':''));
+    }catch(err){ console.warn(err); toast('フォントの読み込みが許可されませんでした'); }
+    finally{ btn.disabled=false; btn.textContent=label; }
   });
   document.getElementById('txtSize').addEventListener('input',e=>{ tool.text.size=+e.target.value; document.getElementById('txtSizeVal').textContent=e.target.value+' px'; textPreview(); });
   document.getElementById('txtBold').addEventListener('click',e=>{ tool.text.bold=!tool.text.bold; e.currentTarget.classList.toggle('on',tool.text.bold); textPreview(); });
@@ -2110,6 +2250,13 @@
   document.getElementById('radialLen').addEventListener('input',e=>{ tool.burst.lenVar=+e.target.value/100; document.getElementById('radialLenVal').textContent=e.target.value+'%'; });
   document.getElementById('radialInner').addEventListener('input',e=>{ tool.burst.inner=+e.target.value/100; document.getElementById('radialInnerVal').textContent=e.target.value+'%'; });
   document.getElementById('radialWidth').addEventListener('input',e=>{ tool.burst.width=+e.target.value; document.getElementById('radialWidthVal').textContent=(+e.target.value).toFixed(1); });
+  function syncFukuro(){ const f=tool.fukuro; document.getElementById('fukuroOw').value=f.ow; document.getElementById('fukuroOwVal').textContent=f.ow+' px';
+    document.getElementById('fukuroIc').value=f.ic; document.getElementById('fukuroHollow').classList.toggle('on',f.hollow);
+    document.getElementById('fukuroIcField').style.opacity=f.hollow?'.45':'1'; }
+  document.getElementById('fukuroOw').addEventListener('input',e=>{ tool.fukuro.ow=+e.target.value; syncFukuro(); });
+  document.getElementById('fukuroIc').addEventListener('input',e=>{ tool.fukuro.ic=e.target.value; });
+  document.getElementById('fukuroHollow').addEventListener('click',()=>{ tool.fukuro.hollow=!tool.fukuro.hollow; syncFukuro(); });
+  document.getElementById('fukuroSwap').addEventListener('click',()=>{ const a=tool.color, b=tool.fukuro.ic; tool.fukuro.ic=a; syncFukuro(); setColor(b); });
   function syncRadialTt(){ const t=Math.round(tool.burst.tt*100), l=Math.round(tool.burst.ttLen*100);
     document.getElementById('radialTt').value=t; document.getElementById('radialTtVal').textContent=t?('線の'+t+'%'):'なし';
     document.getElementById('radialTtLen').value=l; document.getElementById('radialTtLenVal').textContent=l+'%';
@@ -2253,7 +2400,7 @@
     else if(meta&&e.key.toLowerCase()==='y'){ e.preventDefault(); redo(); }
     else if(meta&&e.key.toLowerCase()==='s'){ e.preventDefault(); save(); }
     else if(!meta && (e.key===','||e.key==='.')){ if(anim.playing)stopAnim(); goFrame(curFrame+(e.key===','?-1:1)); }
-    else if(!meta){ const map={b:'pen',n:'pencil',w:'brush',a:'airbrush',m:'marker',e:'eraser',g:'fill',i:'eyedropper',h:'move',t:'text',u:'wand',k:'sparkle'};
+    else if(!meta){ const map={b:'pen',n:'pencil',w:'brush',a:'airbrush',m:'marker',f:'fukuro',e:'eraser',g:'fill',i:'eyedropper',h:'move',t:'text',u:'wand',k:'sparkle'};
       if(map[e.key.toLowerCase()])selectTool(map[e.key.toLowerCase()]);
       if(e.key==='['){ setSize(tool.size-2); }
       if(e.key===']'){ setSize(tool.size+2); } } });
@@ -2736,6 +2883,236 @@
   document.getElementById('symCount').addEventListener('input',()=>{ syncFilterLabels(); drawFilterGuide(); scheduleFilterPreview(); });
   document.getElementById('fltApply').addEventListener('click',applyFilter);
   document.getElementById('fltCancel').addEventListener('click',cancelFilter);
+
+  // ---- PCフォントの日本語名を読む(フォントファイルの name テーブル) ----
+  async function fontJpName(fd){
+    const blob=await fd.blob(); const rd=async(o,n)=>new DataView(await blob.slice(o,o+n).arrayBuffer());
+    const u16=(d,o)=>d.getUint16(o), u32=(d,o)=>d.getUint32(o);
+    const head=await rd(0,12); let offs=[0];
+    if(u32(head,0)===0x74746366){ const n=Math.min(64,u32(head,8)); const t=await rd(12,n*4); offs=[]; for(let i=0;i<n;i++) offs.push(u32(t,i*4)); }
+    const dec16=new TextDecoder('utf-16be'); let sjis=null; try{ sjis=new TextDecoder('shift_jis'); }catch(e){}
+    let fallback=null;
+    for(const off of offs){
+      const h=await rd(off,12), nt=u16(h,4); const dir=await rd(off+12,nt*16); let no=-1, nl=0;
+      for(let i=0;i<nt;i++){ if(u32(dir,i*16)===0x6E616D65){ no=u32(dir,i*16+8); nl=u32(dir,i*16+12); break; } }
+      if(no<0) continue;
+      const nb=await rd(no,Math.min(nl,262144)), cnt=u16(nb,2), so=u16(nb,4); const got={};
+      for(let i=0;i<cnt;i++){ const r=6+i*12; if(r+12>nb.byteLength) break;
+        const pid=u16(nb,r), eid=u16(nb,r+2), lid=u16(nb,r+4), nid=u16(nb,r+6), len=u16(nb,r+8), so2=so+u16(nb,r+10);
+        if(nid!==1&&nid!==4&&nid!==6&&nid!==16) continue; if(so2+len>nb.byteLength) continue;
+        const bytes=new Uint8Array(nb.buffer,nb.byteOffset+so2,len); let str=null, jp=false;
+        if(pid===3||pid===0){ str=dec16.decode(bytes); jp=(pid===3&&lid===0x0411); }
+        else if(pid===1&&eid===1&&lid===11&&sjis){ str=sjis.decode(bytes); jp=true; }
+        else if(pid===1&&eid===0&&lid===0){ str=String.fromCharCode(...bytes); }
+        if(!str) continue; str=str.replace(/\0/g,'').trim(); if(!str) continue;
+        const key=(jp?'j':'e')+nid; if(!got[key] || (pid===3)) got[key]=str; }
+      const jpName = (fd.family===got.e16 && got.j16) ? got.j16 : (got.j1 || got.j16 || null);
+      const hasJpChars = s => s && /[぀-ヿ㐀-鿿＀-￯]/.test(s);
+      const name = hasJpChars(jpName) ? jpName : null;
+      const match = (got.e6 && got.e6===fd.postscriptName) || got.e1===fd.family || got.e16===fd.family;
+      if(match) return name;
+      if(name && !fallback) fallback=name;
+    }
+    return fallback;
+  }
+
+  // ---------- マイフォント(手書きフォント・仮実装) ----------
+  // 1文字 = 線のリスト。座標は 1000×1000 の文字枠(上が0、ベースラインは y=800)。線は [太さ, x,y, x,y, ...]
+  const MF_BASE=800, MF_MID=500;
+  const MF_SETS={ upper:[...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'], lower:[...'abcdefghijklmnopqrstuvwxyz'],
+    hira:[...'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん'] };
+  let myFont={ v:1, glyphs:{} };
+  try{ const j=JSON.parse(localStorage.getItem('drawr_myfont')||'null'); if(j&&j.glyphs) myFont=j; }catch(e){}
+  function mfSave(){ try{ localStorage.setItem('drawr_myfont',JSON.stringify(myFont)); }catch(e){ toast('ブラウザに保存できませんでした(容量不足?)。ファイルに保存してください'); } }
+  const mfIsWide=ch=>ch.charCodeAt(0)>0xff;
+  // 文字の送り幅(1000=全角)。英字は描いた幅に合わせる
+  function mfAdvance(ch, g){
+    if(ch===' ') return 320; if(ch==='　') return 1000;
+    if(!g || !g.s || !g.s.length) return null;
+    if(mfIsWide(ch)) return 1000;
+    const [x0,x1]=mfXRange(g); return Math.max(150, (x1-x0)+120); }
+  function mfLeft(ch, g){ if(mfIsWide(ch)) return 0; return mfXRange(g)[0]-60; }
+  // 横方向の範囲(丸ペン=配列 / 平ペン {t:'f'} / 塗りつぶし {t:'r'})
+  function mfXRange(g){ let x0=1e9,x1=-1e9; const add=(x,h)=>{ if(x-h<x0)x0=x-h; if(x+h>x1)x1=x+h; };
+    for(const it of g.s){
+      if(Array.isArray(it)){ const h=it[0]/2; for(let i=1;i<it.length;i+=2) add(it[i],h); }
+      else if(it.t==='f'){ const h=it.w/2; for(let i=0;i<it.p.length;i+=2) add(it.p[i],h); }
+      else if(it.t==='r'){ for(const lp of it.p) for(let i=0;i<lp.length;i+=2) add(lp[i],0); } }
+    if(x0>x1){ x0=0; x1=0; } return [x0,x1]; }
+  // 文字を em 座標のまま描く(ctx は呼び出し側で拡大・移動済み)
+  function mfStrokeGlyph(ctx, g, widthMul){
+    ctx.lineCap='round'; ctx.lineJoin='round'; const mul=widthMul||1;
+    for(const st of g.s){
+      if(!Array.isArray(st)){ if(st.t==='f') mfFlatPath(ctx,st,mul); else if(st.t==='r') mfRegionPath(ctx,st,mul); continue; }
+      const w=st[0]*mul;
+      if(st.length<=3){ ctx.beginPath(); ctx.arc(st[1],st[2],w/2,0,Math.PI*2); ctx.fill(); continue; }
+      ctx.lineWidth=w; ctx.beginPath(); ctx.moveTo(st[1],st[2]); for(let i=3;i<st.length;i+=2) ctx.lineTo(st[i],st[i+1]); ctx.stroke(); } }
+  // 平ペン: ペン先(細長い長方形)を角度 a で固定し、点から点へ動かした跡(凸包)を塗る
+  function mfNib(st,mul){ const a=(st.a||0)*Math.PI/180, w=st.w*mul, th=Math.max(6,(st.th||0.2)*st.w)*mul;
+    return [Math.cos(a)*w/2, Math.sin(a)*w/2, -Math.sin(a)*th/2, Math.cos(a)*th/2]; }
+  function mfHull(pts){ pts.sort((p,q)=>p[0]-q[0]||p[1]-q[1]); const cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);
+    const lo=[],up=[]; for(const p of pts){ while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0) lo.pop(); lo.push(p); }
+    for(let i=pts.length-1;i>=0;i--){ const p=pts[i]; while(up.length>=2&&cr(up[up.length-2],up[up.length-1],p)<=0) up.pop(); up.push(p); }
+    up.pop(); lo.pop(); return lo.concat(up); }
+  function mfFlatPath(ctx,st,mul){ const [nx,ny,mx,my]=mfNib(st,mul), P=st.p;
+    const corners=(x,y)=>[[x+nx+mx,y+ny+my],[x+nx-mx,y+ny-my],[x-nx-mx,y-ny-my],[x-nx+mx,y-ny+my]];
+    ctx.beginPath();
+    const poly=h=>{ ctx.moveTo(h[0][0],h[0][1]); for(let i=1;i<h.length;i++) ctx.lineTo(h[i][0],h[i][1]); ctx.closePath(); };
+    if(P.length<=2){ poly(mfHull(corners(P[0],P[1]))); }
+    for(let i=2;i<P.length;i+=2) poly(mfHull(corners(P[i-2],P[i-1]).concat(corners(P[i],P[i+1]))));
+    ctx.fill('nonzero'); }
+  // 塗りつぶし: 輪郭(穴あり)を evenodd で塗る
+  function mfRegionPath(ctx,st,mul){ ctx.beginPath();
+    for(const lp of st.p){ if(lp.length<6) continue; ctx.moveTo(lp[0],lp[1]); for(let i=2;i<lp.length;i+=2) ctx.lineTo(lp[i],lp[i+1]); ctx.closePath(); }
+    ctx.fill('evenodd'); }
+  // 塗りつぶしの領域を作る: 今の字形を画像にして、クリックした所から囲まれた範囲を探し、輪郭の線にする
+  function mfMakeFill(g, cx, cy){ const R=400, k=R/1000; const c=document.createElement('canvas'); c.width=c.height=R; const x=c.getContext('2d');
+    x.fillStyle=x.strokeStyle='#000'; x.save(); x.scale(k,k); if(g) mfStrokeGlyph(x,g); x.restore();
+    const a=x.getImageData(0,0,R,R).data, sx=Math.floor(cx*k), sy=Math.floor(cy*k);
+    if(sx<0||sy<0||sx>=R||sy>=R) return null; const ink=i=>a[i*4+3]>=110;
+    if(ink(sy*R+sx)) return {err:'ink'};
+    const m=new Uint8Array(R*R), st=[sy*R+sx]; m[sy*R+sx]=1; let edge=false;
+    while(st.length){ const i=st.pop(), px=i%R, py=(i/R)|0; if(px===0||py===0||px===R-1||py===R-1) edge=true;
+      if(px>0&&!m[i-1]&&!ink(i-1)){ m[i-1]=1; st.push(i-1); } if(px<R-1&&!m[i+1]&&!ink(i+1)){ m[i+1]=1; st.push(i+1); }
+      if(py>0&&!m[i-R]&&!ink(i-R)){ m[i-R]=1; st.push(i-R); } if(py<R-1&&!m[i+R]&&!ink(i+R)){ m[i+R]=1; st.push(i+R); } }
+    if(edge) return {err:'open'};
+    // 線の下にもぐりこませて、すき間が出ないように2px広げる
+    for(let pass=0;pass<2;pass++){ const n=m.slice(); for(let i=0;i<R*R;i++){ if(m[i]) continue; const px=i%R;
+      if((px>0&&m[i-1])||(px<R-1&&m[i+1])||(i>=R&&m[i-R])||(i<R*R-R&&m[i+R])) n[i]=1; } m.set(n); }
+    // ピクセルのふちをたどって輪郭のループにする(塗る側を左に)
+    const W=R+1, nextOf=new Map(); const isOn=(px,py)=>px>=0&&py>=0&&px<R&&py<R&&m[py*R+px];
+    const addE=(x0,y0,x1,y1)=>{ const k0=y0*W+x0; let arr=nextOf.get(k0); if(!arr){ arr=[]; nextOf.set(k0,arr); } arr.push(y1*W+x1); };
+    for(let py=0;py<R;py++) for(let px=0;px<R;px++){ if(!m[py*R+px]) continue;
+      if(!isOn(px,py-1)) addE(px,py,px+1,py); if(!isOn(px+1,py)) addE(px+1,py,px+1,py+1);
+      if(!isOn(px,py+1)) addE(px+1,py+1,px,py+1); if(!isOn(px-1,py)) addE(px,py+1,px,py); }
+    const loops=[];
+    for(const [start] of nextOf){ let arr=nextOf.get(start); while(arr&&arr.length){ const lp=[start]; let cur=start;
+      for(let guard=0;guard<R*R*4;guard++){ const nx=nextOf.get(cur); if(!nx||!nx.length) break; const nk=nx.pop(); if(nk===start) break; lp.push(nk); cur=nk; }
+      if(lp.length>=4) loops.push(lp.map(v=>[v%W,(v/W)|0])); arr=nextOf.get(start); } }
+    // 段々を減らす(Douglas-Peucker)して em 座標へ
+    const dp=(pts,eps)=>{ if(pts.length<3) return pts; let mi=0,md=0; const [a0,b0]=pts[0],[a1,b1]=pts[pts.length-1], L=Math.hypot(a1-a0,b1-b0)||1;
+      for(let i=1;i<pts.length-1;i++){ const d=Math.abs((a1-a0)*(b0-pts[i][1])-(a0-pts[i][0])*(b1-b0))/L; if(d>md){ md=d; mi=i; } }
+      if(md<=eps) return [pts[0],pts[pts.length-1]]; return dp(pts.slice(0,mi+1),eps).slice(0,-1).concat(dp(pts.slice(mi),eps)); };
+    const out=[]; for(const lp of loops){ const h=lp.length>>1; const s1=dp(lp.slice(0,h+1),0.9), s2=dp(lp.slice(h).concat([lp[0]]),0.9);
+      const all=s1.slice(0,-1).concat(s2.slice(0,-1)); if(all.length<3) continue; const f=[]; for(const [px,py] of all) f.push(Math.round(px/k),Math.round(py/k)); out.push(f); }
+    return out.length ? {t:'r', p:out} : null; }
+  // 文字ツール用: その文字の幅(px)
+  function mfCharWidth(ctx, ev, ch){ const g=ev.mf&&ev.mf[ch], adv=mfAdvance(ch,g); return adv==null ? ctx.measureText(ch).width : adv*ev.size/1000; }
+  // 文字ツール用: 1文字描く。align: 'left'|'center' / base: 'alphabetic'|'middle'
+  function mfDrawChar(ctx, ev, ch, x, y, align, base){
+    const g=ev.mf&&ev.mf[ch], adv=mfAdvance(ch,g);
+    if(adv==null){ ctx.save(); ctx.textAlign=align; ctx.textBaseline=base; ctx.fillText(ch,x,y); ctx.restore(); return; }   // 描いていない文字は普通のフォントで
+    if(!g) return;   // 空白
+    const k=ev.size/1000; ctx.save(); ctx.translate(x,y); ctx.scale(k,k);
+    ctx.translate((align==='center'? -adv/2 : 0) - mfLeft(ch,g), base==='middle' ? -MF_MID : -MF_BASE);
+    ctx.strokeStyle=ctx.fillStyle; mfStrokeGlyph(ctx,g,ev.bold?1.35:1); ctx.restore(); }
+  function mfPick(text){ const o={}; for(const ch of [...text]){ const g=myFont.glyphs[ch]; if(g&&g.s&&g.s.length) o[ch]=g; } return o; }
+
+  // ---- 文字を描く画面 ----
+  const mfUI={ set:'upper', ch:'A', drawing:null, guide:true, pen:70, tool:'round', angle:35 };
+  const mfCv=document.getElementById('mfCanvas'), mfx=mfCv.getContext('2d');
+  function mfGlyph(ch){ return myFont.glyphs[ch]; }
+  function mfThumb(c, ch){ const x=c.getContext('2d'); x.clearRect(0,0,c.width,c.height); const g=mfGlyph(ch); if(!g||!g.s.length) return false;
+    const k=c.width/1000; x.save(); x.scale(k,k); x.fillStyle=x.strokeStyle=getComputedStyle(document.body).getPropertyValue('--ink')||'#333'; mfStrokeGlyph(x,g); x.restore(); return true; }
+  function mfRenderGrid(){ const box=document.getElementById('mfGrid'); box.innerHTML='';
+    document.querySelectorAll('#mfTabs button').forEach(b=>b.classList.toggle('active',b.dataset.set===mfUI.set));
+    let done=0;
+    for(const ch of MF_SETS[mfUI.set]){ const b=document.createElement('button'); b.className='mf-cell'+(ch===mfUI.ch?' active':''); b.title=ch;
+      const c=document.createElement('canvas'); c.width=c.height=64; const has=mfThumb(c,ch); if(has) done++;
+      const lab=document.createElement('span'); lab.textContent=ch; b.classList.toggle('has',has);
+      b.appendChild(c); b.appendChild(lab); b.addEventListener('click',()=>mfSelect(ch)); box.appendChild(b); }
+    const all=Object.values(MF_SETS).flat(), total=all.filter(ch=>mfGlyph(ch)&&mfGlyph(ch).s.length).length;
+    document.getElementById('mfProgress').textContent='このグループ '+done+'/'+MF_SETS[mfUI.set].length+'　全体 '+total+'/'+all.length;
+    document.getElementById('mfResetGroup').textContent='「'+MF_GROUP_NAMES[mfUI.set]+'」をリセット';
+    document.getElementById('mfResetGroup').disabled=!done; document.getElementById('mfResetAll').disabled=!Object.keys(myFont.glyphs).length; }
+  const MF_GROUP_NAMES={ upper:'ABC', lower:'abc', hira:'あいう' };
+  let mfResetBackup=null;
+  // keys=null で全部。消す前の状態を1回分だけ覚えておき「リセットを取り消す」で戻せる
+  function mfReset(keys){ const target = keys ? keys.filter(ch=>myFont.glyphs[ch]) : Object.keys(myFont.glyphs);
+    if(!target.length){ toast('消す文字がありません'); return; }
+    const label = keys ? '「'+MF_GROUP_NAMES[mfUI.set]+'」の '+target.length+'文字' : 'マイフォントの全 '+target.length+'文字';
+    askConfirm(label+'を消しますか？ 直後なら「リセットを取り消す」で戻せます。','リセットする',()=>{
+      mfResetBackup=JSON.parse(JSON.stringify(myFont.glyphs));
+      for(const ch of target) delete myFont.glyphs[ch];
+      mfSave(); mfDrawEditor(); mfRenderGrid(); mfTest();
+      document.getElementById('mfResetUndo').style.display='';
+      toast(label+'をリセットしました'); }); }
+  function mfSelect(ch){ mfUI.ch=ch; for(const k in MF_SETS) if(MF_SETS[k].includes(ch)) mfUI.set=k;
+    document.getElementById('mfChar').textContent=ch; mfRenderGrid(); mfDrawEditor(); }
+  function mfDrawEditor(){ const W=mfCv.width, k=W/1000; mfx.clearRect(0,0,W,W); mfx.fillStyle='#ffffff'; mfx.fillRect(0,0,W,W);
+    mfx.save(); mfx.scale(k,k); const ch=mfUI.ch, wide=mfIsWide(ch);
+    // ガイド線
+    mfx.lineWidth=2/k; mfx.strokeStyle='#d6e3ea'; mfx.setLineDash([12,10]);
+    const line=(x0,y0,x1,y1)=>{ mfx.beginPath(); mfx.moveTo(x0,y0); mfx.lineTo(x1,y1); mfx.stroke(); };
+    line(500,0,500,1000); line(0,500,1000,500);
+    if(wide){ mfx.strokeStyle='#9cc7d8'; mfx.strokeRect(80,60,840,840); }
+    else { mfx.strokeStyle='#9cc7d8'; line(0,MF_BASE,1000,MF_BASE); mfx.strokeStyle='#cfe0e8'; line(0,MF_BASE-650,1000,MF_BASE-650); line(0,MF_BASE-420,1000,MF_BASE-420); }
+    mfx.setLineDash([]);
+    if(mfUI.guide){ mfx.fillStyle='rgba(120,150,170,.18)'; mfx.textAlign='center';
+      if(wide){ mfx.font='780px sans-serif'; mfx.textBaseline='middle'; mfx.fillText(ch,500,490); }
+      else { mfx.font='880px sans-serif'; mfx.textBaseline='alphabetic'; mfx.fillText(ch,500,MF_BASE); } }
+    const g=mfGlyph(ch); mfx.fillStyle=mfx.strokeStyle='#26343c';
+    if(g) mfStrokeGlyph(mfx,g);
+    if(mfUI.drawing) mfStrokeGlyph(mfx,{s:[mfUI.drawing]});
+    mfx.restore();
+    document.getElementById('mfUndo').disabled=!(g&&g.s.length);
+    mfCv.style.cursor = mfUI.tool==='fill' ? 'cell' : 'crosshair'; }
+  function mfSetTool(t){ mfUI.tool=t; document.querySelectorAll('#mfToolBtns button').forEach(b=>b.classList.toggle('active',b.dataset.t===t));
+    document.getElementById('mfPenField').style.display = t==='fill' ? 'none' : 'flex';
+    document.getElementById('mfAngleField').style.display = t==='flat' ? 'flex' : 'none'; mfDrawEditor(); }
+  function mfPos(e){ const r=mfCv.getBoundingClientRect(); return [Math.round((e.clientX-r.left)/r.width*1000), Math.round((e.clientY-r.top)/r.height*1000)]; }
+  mfCv.addEventListener('pointerdown',e=>{ e.preventDefault(); const [x,y]=mfPos(e);
+    if(mfUI.tool==='fill'){ const r=mfMakeFill(mfGlyph(mfUI.ch),x,y);
+      if(!r) return; if(r.err==='ink'){ toast('線の上ではなく、線で囲まれた内側をクリックしてください'); return; }
+      if(r.err==='open'){ toast('囲まれていない所は塗れません。線をつないでからもう一度'); return; }
+      const g=myFont.glyphs[mfUI.ch]||(myFont.glyphs[mfUI.ch]={s:[]}); g.s.push(r); mfSave(); mfDrawEditor(); mfRenderGrid(); mfTest(); return; }
+    mfCv.setPointerCapture&&mfCv.setPointerCapture(e.pointerId);
+    mfUI.drawing = mfUI.tool==='flat' ? {t:'f', w:mfUI.pen, a:mfUI.angle, th:0.2, p:[x,y]} : [mfUI.pen,x,y]; mfDrawEditor(); });
+  mfCv.addEventListener('pointermove',e=>{ if(!mfUI.drawing) return; const [x,y]=mfPos(e), d=Array.isArray(mfUI.drawing)?mfUI.drawing:mfUI.drawing.p, lx=d[d.length-2], ly=d[d.length-1];
+    if(Math.hypot(x-lx,y-ly)<5) return; d.push(x,y); mfDrawEditor(); });
+  const mfEnd=()=>{ if(!mfUI.drawing) return; const d=mfUI.drawing; mfUI.drawing=null;
+    const g=myFont.glyphs[mfUI.ch]||(myFont.glyphs[mfUI.ch]={s:[]}); g.s.push(d); mfSave(); mfDrawEditor(); mfRenderGrid(); mfTest(); };
+  mfCv.addEventListener('pointerup',mfEnd); mfCv.addEventListener('pointercancel',mfEnd);
+  function mfUndoStroke(){ const g=mfGlyph(mfUI.ch); if(!g||!g.s.length) return; g.s.pop(); if(!g.s.length) delete myFont.glyphs[mfUI.ch]; mfSave(); mfDrawEditor(); mfRenderGrid(); mfTest(); }
+  function mfStep(dir){ const all=Object.values(MF_SETS).flat(); let i=all.indexOf(mfUI.ch); i=(i+dir+all.length)%all.length; mfSelect(all[i]); }
+  // ためし書き
+  function mfTest(){ const c=document.getElementById('mfTestCanvas'), x=c.getContext('2d'), txt=document.getElementById('mfTestText').value||'';
+    const W=c.width, H=c.height; x.clearRect(0,0,W,H); x.fillStyle='#ffffff'; x.fillRect(0,0,W,H);
+    const ev={ size:Math.round(H*0.62), mf:mfPick(txt), bold:false }; x.font=ev.size+'px sans-serif'; x.fillStyle='#26343c';
+    let px=12; const by=Math.round(H*0.74);
+    for(const ch of [...txt]){ mfDrawChar(x,ev,ch,px,by,'left','alphabetic'); px+=mfCharWidth(x,ev,ch); if(px>W) break; } }
+  function openMyFont(){ stopAnim&&stopAnim(); document.getElementById('mfModal').classList.add('open'); mfSelect(mfUI.ch); mfTest(); }
+  function closeMyFont(){ document.getElementById('mfModal').classList.remove('open'); textPreview();
+    mfResetBackup=null; document.getElementById('mfResetUndo').style.display='none'; }
+  document.getElementById('mfResetGroup').addEventListener('click',()=>mfReset(MF_SETS[mfUI.set]));
+  document.getElementById('mfResetAll').addEventListener('click',()=>mfReset(null));
+  document.getElementById('mfResetUndo').addEventListener('click',()=>{ if(!mfResetBackup) return; myFont.glyphs=mfResetBackup; mfResetBackup=null;
+    mfSave(); mfDrawEditor(); mfRenderGrid(); mfTest(); document.getElementById('mfResetUndo').style.display='none'; toast('リセットを取り消しました'); });
+  document.getElementById('mfOpen').addEventListener('click',openMyFont);
+  document.getElementById('mfClose').addEventListener('click',closeMyFont);
+  document.getElementById('mfUndo').addEventListener('click',mfUndoStroke);
+  document.getElementById('mfClear').addEventListener('click',()=>{ if(!mfGlyph(mfUI.ch)) return; delete myFont.glyphs[mfUI.ch]; mfSave(); mfDrawEditor(); mfRenderGrid(); mfTest(); });
+  document.getElementById('mfPrev').addEventListener('click',()=>mfStep(-1));
+  document.getElementById('mfNext').addEventListener('click',()=>mfStep(1));
+  document.getElementById('mfGuide').addEventListener('click',e=>{ mfUI.guide=!mfUI.guide; e.currentTarget.classList.toggle('on',mfUI.guide); mfDrawEditor(); });
+  document.querySelectorAll('#mfToolBtns button').forEach(b=>b.addEventListener('click',()=>mfSetTool(b.dataset.t)));
+  document.getElementById('mfAngle').addEventListener('input',e=>{ mfUI.angle=+e.target.value; document.getElementById('mfAngleVal').innerHTML=e.target.value+'&deg;'; });
+  document.getElementById('mfPen').addEventListener('input',e=>{ mfUI.pen=+e.target.value; document.getElementById('mfPenVal').textContent=e.target.value; });
+  document.querySelectorAll('#mfTabs button').forEach(b=>b.addEventListener('click',()=>{ mfUI.set=b.dataset.set; mfSelect(MF_SETS[b.dataset.set][0]); }));
+  document.getElementById('mfTestText').addEventListener('input',mfTest);
+  document.getElementById('mfExport').addEventListener('click',()=>{ const blob=new Blob([JSON.stringify(myFont)],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='myfont.drawrfont.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),3000); toast('マイフォントを保存しました'); });
+  document.getElementById('mfImport').addEventListener('click',()=>document.getElementById('mfFile').click());
+  document.getElementById('mfFile').addEventListener('change',e=>{ const f=e.target.files[0]; e.target.value=''; if(!f) return; const r=new FileReader();
+    r.onload=()=>{ try{ const j=JSON.parse(r.result); if(!j||!j.glyphs) throw 0; myFont={v:1,glyphs:j.glyphs}; mfSave(); mfSelect(mfUI.ch); mfTest(); toast('マイフォントを読み込みました'); }
+      catch(err){ toast('マイフォントのファイルではありません'); } }; r.readAsText(f); });
+  // 画面が開いている間のキー操作(Ctrl+Z=1画もどす、←→=前後の文字、Esc=閉じる)
+  window.addEventListener('keydown',e=>{ if(!document.getElementById('mfModal').classList.contains('open')) return;
+    if(document.getElementById('confirmModal').classList.contains('open')){ if(e.key==='Escape'){ e.preventDefault(); closeConfirm(); } e.stopImmediatePropagation(); return; }
+    if(e.target.id==='mfTestText') { if(e.key==='Escape'){ e.preventDefault(); closeMyFont(); } e.stopImmediatePropagation(); return; }
+    const meta=e.ctrlKey||e.metaKey; let used=true;
+    if(meta&&e.key.toLowerCase()==='z') mfUndoStroke(); else if(e.key==='ArrowLeft') mfStep(-1); else if(e.key==='ArrowRight') mfStep(1); else if(e.key==='Escape') closeMyFont(); else used=false;
+    if(used) e.preventDefault(); e.stopImmediatePropagation(); }, true);
 
   // ---------- init ----------
   function init(){
