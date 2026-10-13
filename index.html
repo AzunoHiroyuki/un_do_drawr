@@ -300,6 +300,8 @@
   .pp-item svg { width: 100%; height: 30px; display: block; }
   .pp-item span { font-size: 9.5px; font-weight: 700; color: var(--ink-soft); white-space: nowrap; }
   .pp-ghost { position: fixed; z-index: 300; pointer-events: none; width: 64px; opacity: .85; transform: translate(-50%,-50%); }
+  .pr-meter { height: 6px; border-radius: 4px; background: var(--line); overflow: hidden; }
+  .pr-meter > div { height: 100%; width: 0; background: var(--accent); transition: width .06s; }
   .mf-progress { font-size: 11.5px; font-weight: 700; color: var(--ink-soft); }
 
   .mobile-toggle { display: none; }
@@ -732,6 +734,17 @@
       </div>
       <button class="toggle-btn" id="binaryToggle" title="縁のアンチエイリアスを無くし、くっきりした線にします">2値ペン (アンチエイリアスなし)</button>
     </div>
+    <div class="field" id="pressureField">
+      <div class="field-row"><label>筆圧</label><span class="val" id="prVal" title="いま感じている筆圧">—</span></div>
+      <div class="pr-meter"><div id="prBar"></div></div>
+      <div class="mf-tools" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+        <button class="toggle-btn" id="prWBtn" title="強く押すほど太く">太さ</button>
+        <button class="toggle-btn" id="prABtn" title="強く押すほど濃く(2値ペンがオンのときは効きません)">濃さ</button>
+      </div>
+      <div class="field" id="prMinField" style="display:none;"><div class="field-row"><label>弱いときの太さ</label><span class="val" id="prMinVal">20%</span></div>
+        <input type="range" id="prMin" min="0" max="90" value="20"></div>
+      <div class="layer-hint" style="padding:0;">ペン・えんぴつ・水彩・マーカー・消しゴムで使えます。ペンタブレットやスタイラスが必要です(マウスでは変わりません)。</div>
+    </div>
     <div class="field">
       <div class="field-row"><label>ふとうめい度</label><span class="val" id="opacityVal">100%</span></div>
       <input type="range" id="opacityRange" min="1" max="100" value="100">
@@ -1042,7 +1055,7 @@
     grad:{shape:'linear', style:'smooth', cell:8, endType:'transparent', color2:'#ffffff', dotShape:'dot', htMode:'normal', round:0, arm:0.35},
     sparkle:{density:1, single:true, size:100, spike:0.3, sx:1, sy:1},
     burst:{count:64, inner:0.3, width:1.5, lenVar:0.4, tt:0, ttLen:0.45},
-    fukuro:{ic:'#ffffff', ow:4, hollow:false} };
+    fukuro:{ic:'#ffffff', ow:4, hollow:false}, prW:false, prA:false, prMin:0.2 };
   let selection = null;   // { mask:Uint8Array(CW*CH), edges:[[x,y]...] }
   let selDrag = null;     // 四角/投げ縄でドラッグ中の情報
   let gradDrag = null;    // グラデーションのドラッグ情報
@@ -1107,9 +1120,42 @@
     ctx.globalCompositeOperation=opt.hollow?'destination-out':'source-over'; ctx.drawImage(st.i,x0,y0,bw,bh,x0,y0,bw,bh);
     ctx.restore(); }
 
+  // ---- 筆圧 ----  a.p / b.p に 0〜1 の筆圧。opt.prW=太さ, opt.prA=濃さ, opt.prMin=いちばん細いときの割合
+  const PR_TOOLS=['pen','pencil','brush','marker','eraser'];
+  function prW(opt,pr){ const m=(opt.prMin!=null?opt.prMin:0.2); return opt.prW ? m+(1-m)*pr : 1; }
+  function taperFill(ctx,a,b,wa,wb){ const ra=Math.max(0.3,wa/2), rb=Math.max(0.3,wb/2);
+    ctx.beginPath(); ctx.arc(a.x,a.y,ra,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(b.x,b.y,rb,0,Math.PI*2); ctx.fill();
+    const dx=b.x-a.x, dy=b.y-a.y, L=Math.hypot(dx,dy); if(L<0.01) return; const nx=-dy/L, ny=dx/L;
+    ctx.beginPath(); ctx.moveTo(a.x+nx*ra,a.y+ny*ra); ctx.lineTo(b.x+nx*rb,b.y+ny*rb); ctx.lineTo(b.x-nx*rb,b.y-ny*rb); ctx.lineTo(a.x-nx*ra,a.y-ny*ra); ctx.closePath(); ctx.fill(); }
+  function pressureDraw(ctx, tname, color, size, a, b, shape, angle, opt){
+    const pa=(a.p!=null?a.p:1), pb=(b.p!=null?b.p:1), wa=size*prW(opt,pa), wb=size*prW(opt,pb);
+    ctx.strokeStyle=color; ctx.fillStyle=color;
+    if(shape==='flat'){ const w=(wa+wb)/2;
+      if(tname==='pencil') flatSeg(ctx,color,Math.max(1,w*0.7),a,b,angle,0.4);
+      else if(tname==='brush'){ flatSeg(ctx,color,w,a,b,angle,0.5); flatSeg(ctx,color,w*1.5,a,b,angle,0.5,0.16); }
+      else flatSeg(ctx,color,w,a,b,angle,0.45); return; }
+    if(tname==='pencil') taperFill(ctx,a,b,Math.max(1,wa*0.6),Math.max(1,wb*0.6));
+    else if(tname==='brush'){ taperFill(ctx,a,b,wa,wb); seg(ctx,a,b,(wa+wb)/2*1.6,0.18); }
+    else taperFill(ctx,a,b,wa,wb); }
+  // 濃さ: 線の形を下書き用の小さなキャンバスに描き、筆圧ぶん薄くして「濃い方を残す」で重ねる(つなぎ目が濃くならない)
+  const prScratch=document.createElement('canvas');
+  function pressureSeg(ctx, tname, color, size, a, b, shape, angle, opt){
+    if(!opt.prA){ pressureDraw(ctx,tname,color,size,a,b,shape,angle,opt); return; }
+    const pad=size*1.0+4, W=ctx.canvas.width, H=ctx.canvas.height;
+    const x0=Math.max(0,Math.floor(Math.min(a.x,b.x)-pad)), y0=Math.max(0,Math.floor(Math.min(a.y,b.y)-pad)), x1=Math.min(W,Math.ceil(Math.max(a.x,b.x)+pad)), y1=Math.min(H,Math.ceil(Math.max(a.y,b.y)+pad)), w=x1-x0, h=y1-y0;
+    if(w<=0||h<=0) return;
+    if(prScratch.width<w||prScratch.height<h){ prScratch.width=Math.max(prScratch.width,w); prScratch.height=Math.max(prScratch.height,h); }
+    const sx=prScratch.getContext('2d',{willReadFrequently:true}); sx.setTransform(1,0,0,1,0,0); sx.clearRect(0,0,w,h); sx.translate(-x0,-y0);
+    pressureDraw(sx,tname,color,size,a,b,shape,angle,opt); sx.setTransform(1,0,0,1,0,0);
+    const pa=(a.p!=null?a.p:1), pb=(b.p!=null?b.p:1), k=0.12+0.88*((pa+pb)/2);
+    const src=sx.getImageData(0,0,w,h).data, img=ctx.getImageData(x0,y0,w,h), d=img.data;
+    for(let i=0;i<d.length;i+=4){ const al=src[i+3]*k; if(al>d[i+3]){ d[i]=src[i]; d[i+1]=src[i+1]; d[i+2]=src[i+2]; d[i+3]=al; } }
+    ctx.putImageData(img,x0,y0); }
+
   // draw ONE segment of a stroke onto a wet canvas (full alpha), by tool
   function wetSeg(ctx, tname, color, size, a, b, shape, angle, opt){
     if(tname==='fukuro'){ fukuroSeg(ctx,color,size,a,b,opt||{}); return; }
+    if(opt && (opt.prW||opt.prA) && PR_TOOLS.includes(tname)){ pressureSeg(ctx,tname,color,size,a,b,shape,angle,opt); return; }
     ctx.strokeStyle=color; ctx.fillStyle=color;
     if(shape==='flat'){
       if(tname==='pencil'){ flatSeg(ctx,color,Math.max(1,size*0.7),a,b,angle,0.4); }
@@ -1376,13 +1422,15 @@
     const binOn = tool.binary && BIN_TOOLS.includes(tool.name);
     curStroke={ t:'st', lid:l.id, tool:tool.name, color:tool.color, size:tool.size, op:tool.opacity, seed:airSeed,
       shape:tool.shape, angle:tool.angle, binary:binOn, pts:[Math.round(p.x*2)/2,Math.round(p.y*2)/2] };
+    if(PR_TOOLS.includes(tool.name) && (tool.prW||tool.prA)){ const pr=readPressure(e); p.p=pr; smoothP.p=pr;
+      curStroke.prW=!!tool.prW; curStroke.prA=!!(tool.prA && !binOn); curStroke.prMin=tool.prMin; curStroke.pr=[Math.round(pr*100)/100]; }
     if(tool.name==='fukuro'){ curStroke.ic=tool.fukuro.ic; curStroke.ow=tool.fukuro.ow; curStroke.hollow=tool.fukuro.hollow; curStroke.shape='round'; fkBegin(wctx,CW,CH); }
 
     if(tool.name==='airbrush'){ airPos=p; airStampInto(wctx,tool.color,tool.size,p,airSeed); airSeed++; 
       airTimer=setInterval(()=>{ if(airPos){ airStampInto(wctx,tool.color,tool.size,airPos,airSeed++); previewComposite(); } },45);
     } else if(tool.name==='sparkle'){ curStroke.density=tool.sparkle.density; curStroke.single=tool.sparkle.single; curStroke.size=tool.sparkle.size; curStroke.spike=tool.sparkle.spike; curStroke.sx=tool.sparkle.sx; curStroke.sy=tool.sparkle.sy;
       sparklePaint(wctx,tool.color,tool.sparkle.size,p,curStroke.seed+0,curStroke.density,curStroke.single,curStroke.spike,curStroke.sx,curStroke.sy);
-    } else { wctx.strokeStyle=tool.color; wctx.fillStyle=tool.color; wetSeg(wctx,tool.name,tool.color,tool.size,p,{x:p.x+0.01,y:p.y},tool.shape,tool.angle,curStroke);
+    } else { wctx.strokeStyle=tool.color; wctx.fillStyle=tool.color; wetSeg(wctx,tool.name,tool.color,tool.size,p,{x:p.x+0.01,y:p.y,p:p.p},tool.shape,tool.angle,curStroke);
       if(binOn){ const bb=segBBox(p,p,tool.size); thresholdRegion(wctx,bb.x,bb.y,bb.w,bb.h); } }
     previewComposite();
   }
@@ -1417,7 +1465,8 @@
     const p=getPos(e); drawCursor(p);
     if(!drawing)return;
     const s=tool.smooth; let np;
-    if(s>0){ const f=1/(1+s*0.6); smoothP.x+=(p.x-smoothP.x)*f; smoothP.y+=(p.y-smoothP.y)*f; np={x:smoothP.x,y:smoothP.y}; } else np=p;
+    if(curStroke && curStroke.pr){ const pr=readPressure(e); if(s>0){ const f=1/(1+s*0.6); smoothP.p+=(pr-smoothP.p)*f; } else smoothP.p=pr; }
+    if(s>0){ const f=1/(1+s*0.6); smoothP.x+=(p.x-smoothP.x)*f; smoothP.y+=(p.y-smoothP.y)*f; np={x:smoothP.x,y:smoothP.y,p:smoothP.p}; } else np={x:p.x,y:p.y,p:smoothP.p};
     // throttle points by distance
     const last={x:curStroke.pts[curStroke.pts.length-2],y:curStroke.pts[curStroke.pts.length-1]};
     const dist=Math.hypot(np.x-last.x,np.y-last.y);
@@ -1430,7 +1479,7 @@
     wctx.strokeStyle=tool.color; wctx.fillStyle=tool.color;
     wetSeg(wctx,tool.name,tool.color,tool.size,lastP,np,tool.shape,tool.angle,curStroke);
     if(curStroke.binary){ const bb=segBBox(lastP,np,tool.size); thresholdRegion(wctx,bb.x,bb.y,bb.w,bb.h); }
-    lastP=np; curStroke.pts.push(Math.round(np.x*2)/2,Math.round(np.y*2)/2);
+    lastP=np; curStroke.pts.push(Math.round(np.x*2)/2,Math.round(np.y*2)/2); if(curStroke.pr) curStroke.pr.push(Math.round(np.p*100)/100);
     previewComposite();
   }
 
@@ -2082,14 +2131,14 @@
     else if(ev.t==='st'){
       if(atom.k===0){ endActiveStroke(); play.active={lid:ev.lid,op:ev.op,tool:ev.tool,color:ev.color,size:ev.size,seed:ev.seed||1};
         play.stctx.clearRect(0,0,play.pw,play.ph); if(ev.tool==='fukuro') fkBegin(play.stctx,play.pw,play.ph);
-        const p={x:ev.pts[0],y:ev.pts[1]};
+        const p={x:ev.pts[0],y:ev.pts[1],p:ev.pr?ev.pr[0]:1};
         play.stctx.strokeStyle=ev.color; play.stctx.fillStyle=ev.color;
         if(ev.tool==='airbrush') airStampInto(play.stctx,ev.color,ev.size,p,(ev.seed||1));
         else if(ev.tool==='sparkle') sparklePaint(play.stctx,ev.color,ev.size,p,(ev.seed||1)+0,ev.density,ev.single,ev.spike,ev.sx,ev.sy);
-        else { wetSeg(play.stctx,ev.tool,ev.color,ev.size,p,{x:p.x+0.01,y:p.y},ev.shape,ev.angle,ev);
+        else { wetSeg(play.stctx,ev.tool,ev.color,ev.size,p,{x:p.x+0.01,y:p.y,p:p.p},ev.shape,ev.angle,ev);
           if(ev.binary){ const bb=segBBox(p,p,ev.size); thresholdRegion(play.stctx,bb.x,bb.y,bb.w,bb.h); } }
       } else {
-        const a={x:ev.pts[(atom.k-1)*2],y:ev.pts[(atom.k-1)*2+1]}, b={x:ev.pts[atom.k*2],y:ev.pts[atom.k*2+1]};
+        const a={x:ev.pts[(atom.k-1)*2],y:ev.pts[(atom.k-1)*2+1],p:ev.pr?ev.pr[atom.k-1]:1}, b={x:ev.pts[atom.k*2],y:ev.pts[atom.k*2+1],p:ev.pr?ev.pr[atom.k]:1};
         play.stctx.strokeStyle=ev.color; play.stctx.fillStyle=ev.color;
         if(ev.tool==='airbrush') airStampInto(play.stctx,ev.color,ev.size,b,(ev.seed||1)+atom.k);
         else if(ev.tool==='sparkle') sparklePaint(play.stctx,ev.color,ev.size,b,(ev.seed||1)+atom.k,ev.density,ev.single,ev.spike,ev.sx,ev.sy);
@@ -2215,8 +2264,9 @@
       else if(ev.t==='st'){ stc.clearRect(0,0,CW,CH); if(ev.tool==='fukuro') fkBegin(stc,CW,CH); stc.strokeStyle=ev.color; stc.fillStyle=ev.color; const n=ev.pts.length/2;
         if(ev.tool==='airbrush'){ for(let k=0;k<n;k++) airStampInto(stc,ev.color,ev.size,{x:ev.pts[k*2],y:ev.pts[k*2+1]},(ev.seed||1)+k); }
         else if(ev.tool==='sparkle'){ for(let k=0;k<n;k++) sparklePaint(stc,ev.color,ev.size,{x:ev.pts[k*2],y:ev.pts[k*2+1]},(ev.seed||1)+k,ev.density,ev.single,ev.spike,ev.sx,ev.sy); }
-        else { if(n===1){ wetSeg(stc,ev.tool,ev.color,ev.size,{x:ev.pts[0],y:ev.pts[1]},{x:ev.pts[0]+0.01,y:ev.pts[1]},ev.shape,ev.angle,ev); }
-          for(let k=1;k<n;k++) wetSeg(stc,ev.tool,ev.color,ev.size,{x:ev.pts[(k-1)*2],y:ev.pts[(k-1)*2+1]},{x:ev.pts[k*2],y:ev.pts[k*2+1]},ev.shape,ev.angle,ev);
+        else { const P=k=>({x:ev.pts[k*2],y:ev.pts[k*2+1],p:ev.pr?ev.pr[k]:1});
+          if(n===1){ const q=P(0); wetSeg(stc,ev.tool,ev.color,ev.size,q,{x:q.x+0.01,y:q.y,p:q.p},ev.shape,ev.angle,ev); }
+          for(let k=1;k<n;k++) wetSeg(stc,ev.tool,ev.color,ev.size,P(k-1),P(k),ev.shape,ev.angle,ev);
           if(ev.binary) thresholdRegion(stc,0,0,CW,CH); }
         l.ctx.save(); l.ctx.globalAlpha=ev.op; l.ctx.globalCompositeOperation=(ev.tool==='eraser')?'destination-out':'source-over'; l.ctx.drawImage(clipSrc(strokeTmp),0,0); l.ctx.restore();
       }
@@ -2374,6 +2424,20 @@
   document.getElementById('radialLen').addEventListener('input',e=>{ tool.burst.lenVar=+e.target.value/100; document.getElementById('radialLenVal').textContent=e.target.value+'%'; });
   document.getElementById('radialInner').addEventListener('input',e=>{ tool.burst.inner=+e.target.value/100; document.getElementById('radialInnerVal').textContent=e.target.value+'%'; });
   document.getElementById('radialWidth').addEventListener('input',e=>{ tool.burst.width=+e.target.value; document.getElementById('radialWidthVal').textContent=(+e.target.value).toFixed(1); });
+  // 筆圧の読み取り: マウスは押しても常に1(筆圧なし)。ペンは 0 のことがあるので少しだけ下駄をはかせる
+  function readPressure(e){ let pr=1; if(e && e.pointerType && e.pointerType!=='mouse'){ pr=e.pressure; if(!(pr>0)) pr=(e.buttons?0.5:0); }
+    pr=Math.max(0.02,Math.min(1,pr)); showPressure(e&&e.pointerType==='mouse'?null:pr); return pr; }
+  function showPressure(pr){ document.getElementById('prVal').textContent = pr==null ? 'マウス(筆圧なし)' : Math.round(pr*100)+'%'; document.getElementById('prBar').style.width=(pr==null?0:pr*100)+'%'; }
+  function syncPressureUI(){ document.getElementById('prWBtn').classList.toggle('on',tool.prW); document.getElementById('prABtn').classList.toggle('on',tool.prA);
+    document.getElementById('prMinField').style.display=tool.prW?'flex':'none'; document.getElementById('prMin').value=Math.round(tool.prMin*100); document.getElementById('prMinVal').textContent=Math.round(tool.prMin*100)+'%'; }
+  document.getElementById('prWBtn').addEventListener('click',()=>{ tool.prW=!tool.prW; syncPressureUI(); savePrefs(); });
+  document.getElementById('prABtn').addEventListener('click',()=>{ tool.prA=!tool.prA; syncPressureUI(); savePrefs(); if(tool.prA && tool.binary) toast('「2値ペン」がオンの間は濃さは変わりません。2値ペンをオフにしてください'); });
+  document.getElementById('prMin').addEventListener('input',e=>{ tool.prMin=+e.target.value/100; syncPressureUI(); savePrefs(); });
+  function savePrefs(){ try{ localStorage.setItem('drawr_pressure',JSON.stringify({w:tool.prW,a:tool.prA,m:tool.prMin})); }catch(e){} }
+  try{ const j=JSON.parse(localStorage.getItem('drawr_pressure')||'null'); if(j){ tool.prW=!!j.w; tool.prA=!!j.a; if(j.m!=null) tool.prMin=+j.m; } }catch(e){}
+  syncPressureUI();
+  // ペンを浮かせているときもメーター表示(押していないので0)
+  input.addEventListener('pointermove',e=>{ if(!drawing && e.pointerType==='pen') showPressure(e.pressure||0); });
   function syncFukuro(){ const f=tool.fukuro; document.getElementById('fukuroOw').value=f.ow; document.getElementById('fukuroOwVal').textContent=f.ow+' px';
     document.getElementById('fukuroIc').value=f.ic; document.getElementById('fukuroHollow').classList.toggle('on',f.hollow);
     document.getElementById('fukuroIcField').style.opacity=f.hollow?'.45':'1'; }
