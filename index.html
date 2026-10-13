@@ -603,7 +603,19 @@
         <div class="field-row"><label>きらめきの長さ</label><span class="val" id="sparkleSpikeVal">70</span></div>
         <input type="range" id="sparkleSpike" min="0" max="100" value="70">
       </div>
-      <div class="layer-hint" style="padding:0;">大きさは「ふとさ」で調整。単発はクリックした位置に1個だけ置きます。</div>
+      <div class="field">
+        <div class="field-row"><label>横の長さ</label><span class="val" id="sparkleSxVal">100%</span></div>
+        <input type="range" id="sparkleSx" min="20" max="300" step="5" value="100">
+      </div>
+      <div class="field">
+        <div class="field-row"><label>縦の長さ</label><span class="val" id="sparkleSyVal">100%</span></div>
+        <input type="range" id="sparkleSy" min="20" max="300" step="5" value="100">
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <canvas id="sparklePreview" width="96" height="96" style="width:48px;height:48px;border:1px solid var(--line-strong);border-radius:6px;background:#fff;flex:none;"></canvas>
+        <button class="head-btn" id="sparkleXYReset" style="flex:1;justify-content:center;height:28px;font-size:11.5px;" title="縦横を100%に戻す">縦横を元に戻す</button>
+      </div>
+      <div class="layer-hint" style="padding:0;">大きさは「ふとさ」で調整。単発はクリックした位置に1個だけ置きます。縦横を変えると、きらめきは上下左右の向きにそろいます。</div>
     </div>
 
     <div class="field" id="fukuroOptions" style="display:none;">
@@ -1023,7 +1035,7 @@
     text:{ font:'sans-serif', size:36, bold:false, layout:'straight', pathType:'freehand', radius:120, startDeg:-90, dir:1, side:'out' },
     selTol:32, fillRef:'composite', wandAdd:false, selMode:'wand', fillPattern:{type:'solid', scale:12},
     grad:{shape:'linear', style:'smooth', cell:8, endType:'transparent', color2:'#ffffff', dotShape:'dot', htMode:'normal', round:0, arm:0.35},
-    sparkle:{density:1, single:true, size:100, spike:0.3},
+    sparkle:{density:1, single:true, size:100, spike:0.3, sx:1, sy:1},
     burst:{count:64, inner:0.3, width:1.5, lenVar:0.4, tt:0, ttLen:0.45},
     fukuro:{ic:'#ffffff', ow:4, hollow:false} };
   let selection = null;   // { mask:Uint8Array(CW*CH), edges:[[x,y]...] }
@@ -1115,27 +1127,29 @@
     ctx.restore();
   }
   // キラキラ(4方向のきらめき)を1つ描く
-  function drawSparkle(ctx,cx,cy,R,rot,color,spike){
-    const inner=R*(spike!=null?spike:0.30); ctx.save(); ctx.translate(cx,cy); ctx.rotate(rot||0); ctx.fillStyle=color; ctx.beginPath();
+  // sx/sy: 横・縦のきらめきの長さの倍率(1=同じ)
+  function drawSparkle(ctx,cx,cy,R,rot,color,spike,sx,sy){
+    sx=sx||1; sy=sy||1; const inner=R*(spike!=null?spike:0.30)*Math.min(1,Math.sqrt(sx*sy)); ctx.save(); ctx.translate(cx,cy); ctx.rotate(rot||0); ctx.fillStyle=color; ctx.beginPath();
     for(let i=0;i<4;i++){ const a0=i*Math.PI/2, a1=a0+Math.PI/4, a2=a0+Math.PI/2;
-      const t0x=Math.cos(a0)*R,t0y=Math.sin(a0)*R, cxx=Math.cos(a1)*inner,cyy=Math.sin(a1)*inner, t1x=Math.cos(a2)*R,t1y=Math.sin(a2)*R;
+      const t0x=Math.cos(a0)*R*sx,t0y=Math.sin(a0)*R*sy, cxx=Math.cos(a1)*inner,cyy=Math.sin(a1)*inner, t1x=Math.cos(a2)*R*sx,t1y=Math.sin(a2)*R*sy;
       if(i===0)ctx.moveTo(t0x,t0y); ctx.quadraticCurveTo(cxx,cyy,t1x,t1y); }
     ctx.closePath(); ctx.fill(); ctx.restore();
   }
   // ランダムにキラキラをまく(seedで決定的 → 再生でも同じ)
-  function sparkleStampInto(ctx,color,size,p,seed,density,spike){
+  function sparkleStampInto(ctx,color,size,p,seed,density,spike,sx,sy){ const str=(sx&&sx!==1)||(sy&&sy!==1);
     density=density||1; let s=(seed||1)>>>0; const rnd=()=>{ s=(s*9301+49297)%233280; return s/233280; };
     const n=Math.max(1, Math.round((0.8+rnd()*1.2)*density));
     for(let i=0;i<n;i++){ const R=size*(0.22+rnd()*0.78)*0.5; const ang=rnd()*Math.PI*2, rad=rnd()*size*0.55;
       ctx.save(); ctx.globalAlpha=0.55+rnd()*0.45;
-      drawSparkle(ctx, p.x+Math.cos(ang)*rad, p.y+Math.sin(ang)*rad, Math.max(1.5,R), rnd()*Math.PI*2, color, spike);
+      const rot=rnd()*Math.PI*2;   // 縦横を変えたときは向きをそろえる(乱数の並びは変えない)
+      drawSparkle(ctx, p.x+Math.cos(ang)*rad, p.y+Math.sin(ang)*rad, Math.max(1.5,R), str?0:rot, color, spike, sx, sy);
       ctx.restore(); }
   }
   // イベント/設定に応じてキラキラを1点ぶん描く(単発=中央に1個、連続=散らし)
-  function sparklePaint(ctx, color, size, p, seed, density, single, spike){
-    if(single){ let s=(seed||1)>>>0; const rot=((s*9301+49297)%233280)/233280*Math.PI;
-      ctx.save(); ctx.globalAlpha=1; drawSparkle(ctx, p.x, p.y, Math.max(2,size*0.5), rot, color, spike); ctx.restore(); }
-    else sparkleStampInto(ctx,color,size,p,seed,density,spike);
+  function sparklePaint(ctx, color, size, p, seed, density, single, spike, sx, sy){ const str=(sx&&sx!==1)||(sy&&sy!==1);
+    if(single){ let s=(seed||1)>>>0; const rot=str?0:((s*9301+49297)%233280)/233280*Math.PI;
+      ctx.save(); ctx.globalAlpha=1; drawSparkle(ctx, p.x, p.y, Math.max(2,size*0.5), rot, color, spike, sx, sy); ctx.restore(); }
+    else sparkleStampInto(ctx,color,size,p,seed,density,spike,sx,sy);
   }
   // 放射線(集中線・光): 中心から外へ、ランダムな長さ・角度ゆらぎの線を描く。seedで決定的。
   function renderBurst(destCtx, ev, w, h, selMask){
@@ -1361,8 +1375,8 @@
 
     if(tool.name==='airbrush'){ airPos=p; airStampInto(wctx,tool.color,tool.size,p,airSeed); airSeed++; 
       airTimer=setInterval(()=>{ if(airPos){ airStampInto(wctx,tool.color,tool.size,airPos,airSeed++); previewComposite(); } },45);
-    } else if(tool.name==='sparkle'){ curStroke.density=tool.sparkle.density; curStroke.single=tool.sparkle.single; curStroke.size=tool.sparkle.size; curStroke.spike=tool.sparkle.spike;
-      sparklePaint(wctx,tool.color,tool.sparkle.size,p,curStroke.seed+0,curStroke.density,curStroke.single,curStroke.spike);
+    } else if(tool.name==='sparkle'){ curStroke.density=tool.sparkle.density; curStroke.single=tool.sparkle.single; curStroke.size=tool.sparkle.size; curStroke.spike=tool.sparkle.spike; curStroke.sx=tool.sparkle.sx; curStroke.sy=tool.sparkle.sy;
+      sparklePaint(wctx,tool.color,tool.sparkle.size,p,curStroke.seed+0,curStroke.density,curStroke.single,curStroke.spike,curStroke.sx,curStroke.sy);
     } else { wctx.strokeStyle=tool.color; wctx.fillStyle=tool.color; wetSeg(wctx,tool.name,tool.color,tool.size,p,{x:p.x+0.01,y:p.y},tool.shape,tool.angle,curStroke);
       if(binOn){ const bb=segBBox(p,p,tool.size); thresholdRegion(wctx,bb.x,bb.y,bb.w,bb.h); } }
     previewComposite();
@@ -1406,7 +1420,7 @@
     if(tool.name==='sparkle'){ if(curStroke.single) return;   // 単発はドラッグでまかない
       const spacing=Math.max(4, tool.sparkle.size*0.3/(tool.sparkle.density||1));
       if(dist>=spacing){ const k=curStroke.pts.length/2; curStroke.pts.push(Math.round(np.x*2)/2,Math.round(np.y*2)/2);
-        sparklePaint(wctx,tool.color,tool.sparkle.size,np,curStroke.seed+k,curStroke.density,false,curStroke.spike); previewComposite(); } return; }
+        sparklePaint(wctx,tool.color,tool.sparkle.size,np,curStroke.seed+k,curStroke.density,false,curStroke.spike,curStroke.sx,curStroke.sy); previewComposite(); } return; }
     if(dist<1.2) return;
     wctx.strokeStyle=tool.color; wctx.fillStyle=tool.color;
     wetSeg(wctx,tool.name,tool.color,tool.size,lastP,np,tool.shape,tool.angle,curStroke);
@@ -2066,14 +2080,14 @@
         const p={x:ev.pts[0],y:ev.pts[1]};
         play.stctx.strokeStyle=ev.color; play.stctx.fillStyle=ev.color;
         if(ev.tool==='airbrush') airStampInto(play.stctx,ev.color,ev.size,p,(ev.seed||1));
-        else if(ev.tool==='sparkle') sparklePaint(play.stctx,ev.color,ev.size,p,(ev.seed||1)+0,ev.density,ev.single,ev.spike);
+        else if(ev.tool==='sparkle') sparklePaint(play.stctx,ev.color,ev.size,p,(ev.seed||1)+0,ev.density,ev.single,ev.spike,ev.sx,ev.sy);
         else { wetSeg(play.stctx,ev.tool,ev.color,ev.size,p,{x:p.x+0.01,y:p.y},ev.shape,ev.angle,ev);
           if(ev.binary){ const bb=segBBox(p,p,ev.size); thresholdRegion(play.stctx,bb.x,bb.y,bb.w,bb.h); } }
       } else {
         const a={x:ev.pts[(atom.k-1)*2],y:ev.pts[(atom.k-1)*2+1]}, b={x:ev.pts[atom.k*2],y:ev.pts[atom.k*2+1]};
         play.stctx.strokeStyle=ev.color; play.stctx.fillStyle=ev.color;
         if(ev.tool==='airbrush') airStampInto(play.stctx,ev.color,ev.size,b,(ev.seed||1)+atom.k);
-        else if(ev.tool==='sparkle') sparklePaint(play.stctx,ev.color,ev.size,b,(ev.seed||1)+atom.k,ev.density,ev.single,ev.spike);
+        else if(ev.tool==='sparkle') sparklePaint(play.stctx,ev.color,ev.size,b,(ev.seed||1)+atom.k,ev.density,ev.single,ev.spike,ev.sx,ev.sy);
         else { wetSeg(play.stctx,ev.tool,ev.color,ev.size,a,b,ev.shape,ev.angle,ev);
           if(ev.binary){ const bb=segBBox(a,b,ev.size); thresholdRegion(play.stctx,bb.x,bb.y,bb.w,bb.h); } }
       }
@@ -2195,7 +2209,7 @@
       else if(ev.t==='maskclear'){ if(ev.rle){ const mc=maskCanvasOf(decodeRLE(ev.rle)); l.ctx.save(); l.ctx.globalCompositeOperation='destination-out'; l.ctx.drawImage(mc,0,0); l.ctx.restore(); } }
       else if(ev.t==='st'){ stc.clearRect(0,0,CW,CH); if(ev.tool==='fukuro') fkBegin(stc,CW,CH); stc.strokeStyle=ev.color; stc.fillStyle=ev.color; const n=ev.pts.length/2;
         if(ev.tool==='airbrush'){ for(let k=0;k<n;k++) airStampInto(stc,ev.color,ev.size,{x:ev.pts[k*2],y:ev.pts[k*2+1]},(ev.seed||1)+k); }
-        else if(ev.tool==='sparkle'){ for(let k=0;k<n;k++) sparklePaint(stc,ev.color,ev.size,{x:ev.pts[k*2],y:ev.pts[k*2+1]},(ev.seed||1)+k,ev.density,ev.single,ev.spike); }
+        else if(ev.tool==='sparkle'){ for(let k=0;k<n;k++) sparklePaint(stc,ev.color,ev.size,{x:ev.pts[k*2],y:ev.pts[k*2+1]},(ev.seed||1)+k,ev.density,ev.single,ev.spike,ev.sx,ev.sy); }
         else { if(n===1){ wetSeg(stc,ev.tool,ev.color,ev.size,{x:ev.pts[0],y:ev.pts[1]},{x:ev.pts[0]+0.01,y:ev.pts[1]},ev.shape,ev.angle,ev); }
           for(let k=1;k<n;k++) wetSeg(stc,ev.tool,ev.color,ev.size,{x:ev.pts[(k-1)*2],y:ev.pts[(k-1)*2+1]},{x:ev.pts[k*2],y:ev.pts[k*2+1]},ev.shape,ev.angle,ev);
           if(ev.binary) thresholdRegion(stc,0,0,CW,CH); }
@@ -2245,6 +2259,7 @@
     document.getElementById('fillOptions').style.display = (name==='fill')?'flex':'none';
     document.getElementById('gradOptions').style.display = (name==='gradient')?'flex':'none';
     document.getElementById('sparkleOptions').style.display = (name==='sparkle')?'flex':'none';
+    if(name==='sparkle') drawSparklePreview();
     document.getElementById('radialOptions').style.display = (name==='radial')?'flex':'none';
     document.getElementById('fukuroOptions').style.display = (name==='fukuro')?'flex':'none';
     document.getElementById('panelOptions').style.display = (name==='panel')?'flex':'none';
@@ -2342,7 +2357,14 @@
   document.getElementById('gradHtMode').addEventListener('change',e=>{ tool.grad.htMode=e.target.value; });
   document.getElementById('sparkleSingle').addEventListener('change',e=>{ tool.sparkle.single=(e.target.value==='1'); document.getElementById('sparkleDensityField').style.display=tool.sparkle.single?'none':'flex'; });
   document.getElementById('sparkleDensity').addEventListener('input',e=>{ tool.sparkle.density=+e.target.value; document.getElementById('sparkleDensityVal').textContent=(+e.target.value).toFixed(1); });
-  document.getElementById('sparkleSpike').addEventListener('input',e=>{ tool.sparkle.spike=0.5-(+e.target.value/100)*0.42; document.getElementById('sparkleSpikeVal').textContent=e.target.value; });
+  document.getElementById('sparkleSpike').addEventListener('input',e=>{ tool.sparkle.spike=0.5-(+e.target.value/100)*0.42; document.getElementById('sparkleSpikeVal').textContent=e.target.value; drawSparklePreview(); });
+  function drawSparklePreview(){ const c=document.getElementById('sparklePreview'), x=c.getContext('2d'); x.clearRect(0,0,96,96);
+    const m=Math.max(tool.sparkle.sx,tool.sparkle.sy,1); drawSparkle(x,48,48,40/m,0,tool.color||'#333',tool.sparkle.spike,tool.sparkle.sx,tool.sparkle.sy); }
+  function syncSparkleXY(){ const t=tool.sparkle; document.getElementById('sparkleSx').value=Math.round(t.sx*100); document.getElementById('sparkleSy').value=Math.round(t.sy*100);
+    document.getElementById('sparkleSxVal').textContent=Math.round(t.sx*100)+'%'; document.getElementById('sparkleSyVal').textContent=Math.round(t.sy*100)+'%'; drawSparklePreview(); }
+  document.getElementById('sparkleSx').addEventListener('input',e=>{ tool.sparkle.sx=+e.target.value/100; syncSparkleXY(); });
+  document.getElementById('sparkleSy').addEventListener('input',e=>{ tool.sparkle.sy=+e.target.value/100; syncSparkleXY(); });
+  document.getElementById('sparkleXYReset').addEventListener('click',()=>{ tool.sparkle.sx=1; tool.sparkle.sy=1; syncSparkleXY(); });
   document.getElementById('radialCount').addEventListener('input',e=>{ tool.burst.count=+e.target.value; document.getElementById('radialCountVal').textContent=e.target.value; });
   document.getElementById('radialLen').addEventListener('input',e=>{ tool.burst.lenVar=+e.target.value/100; document.getElementById('radialLenVal').textContent=e.target.value+'%'; });
   document.getElementById('radialInner').addEventListener('input',e=>{ tool.burst.inner=+e.target.value/100; document.getElementById('radialInnerVal').textContent=e.target.value+'%'; });
