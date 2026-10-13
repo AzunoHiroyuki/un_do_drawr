@@ -1428,8 +1428,8 @@
 
     if(tool.name==='airbrush'){ airPos=p; airStampInto(wctx,tool.color,tool.size,p,airSeed); airSeed++; 
       airTimer=setInterval(()=>{ if(airPos){ airStampInto(wctx,tool.color,tool.size,airPos,airSeed++); previewComposite(); } },45);
-    } else if(tool.name==='sparkle'){ curStroke.density=tool.sparkle.density; curStroke.single=tool.sparkle.single; curStroke.size=tool.sparkle.size; curStroke.spike=tool.sparkle.spike; curStroke.sx=tool.sparkle.sx; curStroke.sy=tool.sparkle.sy;
-      sparklePaint(wctx,tool.color,tool.sparkle.size,p,curStroke.seed+0,curStroke.density,curStroke.single,curStroke.spike,curStroke.sx,curStroke.sy);
+    } else if(tool.name==='sparkle'){ curStroke.density=tool.sparkle.density; curStroke.single=tool.sparkle.single; curStroke.size=tool.size; curStroke.spike=tool.sparkle.spike; curStroke.sx=tool.sparkle.sx; curStroke.sy=tool.sparkle.sy;
+      sparklePaint(wctx,tool.color,tool.size,p,curStroke.seed+0,curStroke.density,curStroke.single,curStroke.spike,curStroke.sx,curStroke.sy);
     } else { wctx.strokeStyle=tool.color; wctx.fillStyle=tool.color; wetSeg(wctx,tool.name,tool.color,tool.size,p,{x:p.x+0.01,y:p.y,p:p.p},tool.shape,tool.angle,curStroke);
       if(binOn){ const bb=segBBox(p,p,tool.size); thresholdRegion(wctx,bb.x,bb.y,bb.w,bb.h); } }
     previewComposite();
@@ -1472,9 +1472,9 @@
     const dist=Math.hypot(np.x-last.x,np.y-last.y);
     if(tool.name==='airbrush'){ airPos=np; if(dist>=2){ curStroke.pts.push(Math.round(np.x*2)/2,Math.round(np.y*2)/2); } return; }
     if(tool.name==='sparkle'){ if(curStroke.single) return;   // 単発はドラッグでまかない
-      const spacing=Math.max(4, tool.sparkle.size*0.3/(tool.sparkle.density||1));
+      const spacing=Math.max(4, tool.size*0.3/(tool.sparkle.density||1));
       if(dist>=spacing){ const k=curStroke.pts.length/2; curStroke.pts.push(Math.round(np.x*2)/2,Math.round(np.y*2)/2);
-        sparklePaint(wctx,tool.color,tool.sparkle.size,np,curStroke.seed+k,curStroke.density,false,curStroke.spike,curStroke.sx,curStroke.sy); previewComposite(); } return; }
+        sparklePaint(wctx,tool.color,tool.size,np,curStroke.seed+k,curStroke.density,false,curStroke.spike,curStroke.sx,curStroke.sy); previewComposite(); } return; }
     if(dist<1.2) return;
     wctx.strokeStyle=tool.color; wctx.fillStyle=tool.color;
     wetSeg(wctx,tool.name,tool.color,tool.size,lastP,np,tool.shape,tool.angle,curStroke);
@@ -1522,6 +1522,7 @@
     curctx.clearRect(0,0,CW,CH);
     if(!isDrawTool(tool.name)) return;
     const r=Math.max(1,tool.size/2);
+    if(tool.name==='sparkle'){ curctx.save(); curctx.globalAlpha=0.35; drawSparkle(curctx,p.x,p.y,Math.max(2,tool.size*0.5),0,tool.color,tool.sparkle.spike,tool.sparkle.sx,tool.sparkle.sy); curctx.restore(); return; }
     curctx.save(); curctx.lineWidth=1/zoom;
     if(tool.shape==='flat' && tool.name!=='airbrush'){
       const thick=Math.max(1.2,tool.size*0.45);
@@ -2306,7 +2307,12 @@
     if(name==='fill'||name==='wand'||name==='eyedropper'||name==='gradient'||name==='radial'||name==='bubble') return CROSSHAIR;
     return 'default';
   }
-  function selectTool(name){ cancelFilter(); endMoveSession(); tool.name=name; document.querySelectorAll('.tool').forEach(t=>t.classList.toggle('active',t.dataset.tool===name));
+  // キラキラは「ふとさ」を大きさに使う。ほかのペンとは別に大きさを覚えておく(切り替えてもペンの太さが変わらないように)
+  let otherSize=null;
+  function selectTool(name){ cancelFilter(); endMoveSession();
+    if(tool.name==='sparkle' && name!=='sparkle'){ tool.sparkle.size=tool.size; if(otherSize!=null) setSize(otherSize); }
+    else if(name==='sparkle' && tool.name!=='sparkle'){ otherSize=tool.size; setSize(tool.sparkle.size); }
+    tool.name=name; document.querySelectorAll('.tool').forEach(t=>t.classList.toggle('active',t.dataset.tool===name));
     input.style.cursor = toolCursor(name); curctx.clearRect(0,0,CW,CH);
     // ツール別オプションの表示切替
     document.getElementById('textOptions').style.display = (name==='text')?'flex':'none';
@@ -2469,7 +2475,7 @@
   document.getElementById('palEdit').addEventListener('click',e=>{ palEditMode=!palEditMode; e.target.classList.toggle('on',palEditMode); renderMyPalette(); toast(palEditMode?'クリックで色を削除':'編集おわり'); });
 
   const sizeR=document.getElementById('sizeRange');
-  function setSize(v){ tool.size=Math.max(1,Math.min(120,v)); sizeR.value=tool.size; document.getElementById('sizeVal').textContent=tool.size+' px'; syncSizePresets(); }
+  function setSize(v){ tool.size=Math.max(1,Math.min(400,Math.round(v))); sizeR.value=tool.size; document.getElementById('sizeVal').textContent=tool.size+' px'; syncSizePresets(); }
   sizeR.addEventListener('input',e=>{ tool.size=+e.target.value; document.getElementById('sizeVal').textContent=tool.size+' px'; syncSizePresets(); });
 
   // size presets
