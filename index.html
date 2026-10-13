@@ -325,10 +325,10 @@
   <button class="head-btn" id="themeBtn" title="テーマ切替">&#127769;</button>
   <button class="head-btn" id="animBtn" title="コマを並べてGIFアニメを作る">GIFアニメ</button>
   <button class="head-btn" id="filterBtn" title="今のレイヤーにフィルターをかける(選択中なら選択の中だけ)">フィルター</button>
-  <button class="head-btn" id="openBtn" title="PNG/GIFを開く(過程つきPNGは再生、アニメGIFはコマごと編集)">ひらく</button>
+  <button class="head-btn" id="openBtn" title="PNG/GIF/PSD/PDFを開く(レイヤー付きPSDはレイヤーごとに読み込み、過程つきPNGは再生、アニメGIFはコマごと編集、レイヤー付きPDFはレイヤーごとに読み込み)">ひらく</button>
   <button class="head-btn primary" id="saveBtn" title="過程を埋め込んだPNGを保存">PNG保存</button>
   <button class="head-btn mobile-toggle" id="toggleLayers" title="レイヤー">&#9636;</button>
-  <input type="file" id="fileInput" accept="image/png,image/*" style="display:none">
+  <input type="file" id="fileInput" accept="image/png,image/*,.psd,.psb,image/vnd.adobe.photoshop,application/pdf,.pdf" style="display:none">
 </header>
 
 <main>
@@ -959,6 +959,31 @@
       <button class="head-btn primary" id="mfClose">閉じる</button>
     </div>
     <input type="file" id="mfFile" accept=".json,application/json" style="display:none;">
+  </div>
+</div>
+
+<div class="modal" id="psdModal">
+  <div class="modal-box" style="width:380px;">
+    <div class="opt-title" style="font-size:14px;color:var(--ink);">PSDを読み込む</div>
+    <div class="gif-info" id="psdInfo"></div>
+    <div class="rz-note" id="psdNotes" style="line-height:1.5;"></div>
+    <div class="field"><div class="field-row"><label>大きさ</label></div><select class="layer-mode" id="psdSize"></select></div>
+    <button class="toggle-btn on" id="psdHidden" title="PSDで非表示になっているレイヤーも、非表示のまま読み込む">非表示のレイヤーも読み込む</button>
+    <button class="toggle-btn on" id="psdReplace" title="オン: 今の絵を閉じてPSDだけにする / オフ: 今の絵の上に追加する">今の絵を閉じてPSDを開く</button>
+    <div class="rz-actions"><button class="head-btn" id="psdCancel">やめる</button><button class="head-btn primary" id="psdOk">読み込む</button></div>
+  </div>
+</div>
+
+<div class="modal" id="pdfModal">
+  <div class="modal-box" style="width:380px;">
+    <div class="opt-title" style="font-size:14px;color:var(--ink);">PDFを読み込む</div>
+    <div class="gif-info" id="pdfInfo"></div>
+    <div class="rz-note" id="pdfLayerList" style="line-height:1.5;"></div>
+    <div class="field"><div class="field-row"><label>ページ</label></div><select class="layer-mode" id="pdfPage"></select></div>
+    <div class="field"><div class="field-row"><label>大きさ</label></div><select class="layer-mode" id="pdfSize"></select></div>
+    <button class="toggle-btn on" id="pdfSplit" title="PDFのレイヤーを、それぞれ別のレイヤーとして読み込む">レイヤーごとに分けて読み込む</button>
+    <div class="rz-note">今の絵の上に、新しいレイヤーとして追加します。PDFの大きさを選ぶとキャンバスの大きさも変わります(今の絵は左上を基準に残ります)。</div>
+    <div class="rz-actions"><button class="head-btn" id="pdfCancel">やめる</button><button class="head-btn primary" id="pdfOk">読み込む</button></div>
   </div>
 </div>
 
@@ -1940,6 +1965,8 @@
     endMoveSession();
     const reader=new FileReader();
     reader.onload=()=>{ const buf=reader.result; const bytes=new Uint8Array(buf);
+      if(bytes[0]===0x25&&bytes[1]===0x50&&bytes[2]===0x44&&bytes[3]===0x46){ openPdf(bytes, file.name); return; }   // %PDF
+      if(bytes[0]===0x38&&bytes[1]===0x42&&bytes[2]===0x50&&bytes[3]===0x53){ openPsd(buf, file.name); return; }     // 8BPS
       const proj=extractGifProject(bytes);
       if(proj && proj.frames && proj.frames.length){
         const busy = frames.length>1 || currentEvents().some(e=>e.t!=='bgfill');
@@ -3385,6 +3412,214 @@
   document.getElementById('bubbleTail').addEventListener('click',()=>{ tool.bubble.tail=!tool.bubble.tail; syncComicUI(); });
   window.addEventListener('keydown',e=>{ if(bubbleDrag && bubbleDrag.stage==='tail' && (e.key==='Escape'||e.key==='Enter')){ e.preventDefault(); e.stopImmediatePropagation(); commitBubble(e.key==='Enter'); } }, true);
   syncComicUI();
+
+  // ---------- PDFの読み込み(レイヤー付きPDFはレイヤーごとに分ける) ----------
+  const PDFJS_BASE='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+  let pdfjsReady=null;
+  function loadPdfJs(){ if(window.pdfjsLib) return Promise.resolve(window.pdfjsLib); if(pdfjsReady) return pdfjsReady;
+    pdfjsReady=new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=PDFJS_BASE+'pdf.min.js';
+      s.onload=()=>{ const L=window.pdfjsLib||window['pdfjs-dist/build/pdf']; if(!L){ pdfjsReady=null; rej(new Error('pdf.js')); return; }
+        L.GlobalWorkerOptions.workerSrc=PDFJS_BASE+'pdf.worker.min.js'; res(L); };
+      s.onerror=()=>{ pdfjsReady=null; rej(new Error('load')); }; document.head.appendChild(s); });
+    return pdfjsReady; }
+  const pdfState={ doc:null, groups:[], name:'' };
+  // レイヤー(OCG)の一覧を、下から上の順にして返す
+  async function pdfGroups(doc){ const cfg=await doc.getOptionalContentConfig(); if(!cfg) return [];
+    const map=cfg.getGroups ? cfg.getGroups() : null; if(!map) return [];
+    const ids=Object.keys(map), byId=id=>({ id, name:(map[id].name||'レイヤー'), visible:map[id].visible!==false });
+    let order=[]; try{ const flat=a=>{ for(const v of (a||[])){ if(typeof v==='string') order.push(v); else if(Array.isArray(v)) flat(v); else if(v&&v.order) flat(v.order); } }; flat(cfg.getOrder&&cfg.getOrder()); }catch(e){}
+    order=order.filter(id=>map[id]);
+    // パネルの並び(上=前面)があればそれを逆にして下から上へ。無ければ定義順
+    const list = order.length ? order.slice().reverse() : ids.slice(); for(const id of ids) if(!list.includes(id)) list.push(id);
+    return list.map(byId); }
+  async function pdfRender(page, scale, onlyIds){ const vp=page.getViewport({scale}); const c=document.createElement('canvas');
+    c.width=Math.max(1,Math.ceil(vp.width)); c.height=Math.max(1,Math.ceil(vp.height));
+    const params={ canvasContext:c.getContext('2d'), viewport:vp, background:'rgba(0,0,0,0)' };
+    if(onlyIds){ const cfg=await pdfState.doc.getOptionalContentConfig(); for(const g of pdfState.groups) cfg.setVisibility(g.id, onlyIds.has(g.id)); params.optionalContentConfigPromise=Promise.resolve(cfg); }
+    await page.render(params).promise; return c; }
+  // full から base と同じ所を消して、そのレイヤーだけの絵を取り出す
+  function pdfDiff(full, base){ const w=full.width, h=full.height, fx=full.getContext('2d'), a=fx.getImageData(0,0,w,h), b=base.getContext('2d').getImageData(0,0,w,h).data, d=a.data; let any=false;
+    for(let i=0;i<d.length;i+=4){ if(Math.abs(d[i]-b[i])<3&&Math.abs(d[i+1]-b[i+1])<3&&Math.abs(d[i+2]-b[i+2])<3&&Math.abs(d[i+3]-b[i+3])<3){ d[i+3]=0; } else if(d[i+3]) any=true; }
+    fx.putImageData(a,0,0); return any; }
+  function pdfHasInk(c){ const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data; for(let i=3;i<d.length;i+=4) if(d[i]) return true; return false; }
+  async function openPdf(bytes, name){
+    toast('PDFを読み込んでいます…'); let L;
+    try{ L=await loadPdfJs(); }catch(e){ toast('PDFを読む部品を読み込めませんでした(インターネット接続が必要です)'); return; }
+    try{ pdfState.doc=await L.getDocument({data:bytes}).promise; }catch(e){ console.warn(e); toast(e&&e.name==='PasswordException'?'パスワード付きのPDFは開けません':'PDFを開けませんでした'); return; }
+    pdfState.groups=await pdfGroups(pdfState.doc); pdfState.name=(name||'PDF').replace(/\.pdf$/i,'');
+    const doc=pdfState.doc, pg=await doc.getPage(1), vp=pg.getViewport({scale:1});
+    document.getElementById('pdfInfo').textContent=doc.numPages+'ページ'+(pdfState.groups.length?('・レイヤー '+pdfState.groups.length+'枚'):'・レイヤーなし');
+    document.getElementById('pdfLayerList').textContent = pdfState.groups.length ? '上から: '+pdfState.groups.slice().reverse().map(g=>g.name+(g.visible?'':'(非表示)')).join(' / ') : 'このPDFにはレイヤーがありません。ページを1枚の画像として読み込みます。';
+    const ps=document.getElementById('pdfPage'); ps.innerHTML=''; for(let i=1;i<=doc.numPages;i++){ const o=document.createElement('option'); o.value=i; o.textContent=i+'ページ'; ps.appendChild(o); }
+    const sz=document.getElementById('pdfSize'), w=Math.round(vp.width), h=Math.round(vp.height); sz.innerHTML='';
+    [['fit','今のキャンバス('+CW+'×'+CH+')に収める'],['1','PDFの大きさ('+w+'×'+h+')'],['2','PDFの2倍('+Math.min(4000,w*2)+'×'+Math.min(4000,h*2)+')'],['3','PDFの3倍('+Math.min(4000,w*3)+'×'+Math.min(4000,h*3)+')']]
+      .forEach(([v,t])=>{ const o=document.createElement('option'); o.value=v; o.textContent=t; sz.appendChild(o); });
+    sz.value = (Math.abs(w-CW)<2&&Math.abs(h-CH)<2) ? '1' : '2';
+    const sep=document.getElementById('pdfSplit'); sep.disabled=!pdfState.groups.length; sep.classList.toggle('on',!!pdfState.groups.length);
+    document.getElementById('pdfModal').classList.add('open'); }
+  async function importPdf(){ const doc=pdfState.doc; if(!doc) return; const btn=document.getElementById('pdfOk'); if(btn.disabled) return;
+    const pno=+document.getElementById('pdfPage').value||1, size=document.getElementById('pdfSize').value, split=document.getElementById('pdfSplit').classList.contains('on') && pdfState.groups.length>0;
+    btn.disabled=true; const label=btn.textContent;
+    try{ endMoveSession(); stopAnim&&stopAnim(); const page=await doc.getPage(pno), vp1=page.getViewport({scale:1});
+      let scale, ox=0, oy=0;
+      if(size==='fit'){ scale=Math.min(CW/vp1.width, CH/vp1.height); }
+      else { scale=Math.min(+size, 4000/vp1.width, 4000/vp1.height); const nw=Math.max(32,Math.round(vp1.width*scale)), nh=Math.max(32,Math.round(vp1.height*scale));
+        if(nw!==CW||nh!==CH){ CW=nw; CH=nh; resizeAll(); fitZoom(); } }
+      const pw=Math.ceil(vp1.width*scale), ph=Math.ceil(vp1.height*scale); ox=Math.round((CW-pw)/2); oy=Math.round((CH-ph)/2); if(size!=='fit'){ ox=0; oy=0; }
+      const parts=[];   // {name, canvas, visible} 下から上
+      if(split){ btn.textContent='レイヤー外の部分を読み込み中…';
+        const base=await pdfRender(page, scale, new Set()); if(pdfHasInk(base)) parts.push({name:pdfState.name+' (レイヤー外)', canvas:base, visible:true});
+        let n=0; for(const g of pdfState.groups){ n++; btn.textContent='レイヤーを分けています '+n+'/'+pdfState.groups.length;
+          const full=await pdfRender(page, scale, new Set([g.id])); if(pdfDiff(full, base)) parts.push({name:g.name, canvas:full, visible:g.visible}); } }
+      else { btn.textContent='読み込み中…'; parts.push({name:pdfState.name+' p.'+pno, canvas:await pdfRender(page, scale, null), visible:true}); }
+      if(!parts.length){ toast('このページには描かれているものがありませんでした'); return; }
+      for(const pt of parts){ const l=addLayer({name:pt.name}); l.ctx.drawImage(pt.canvas,ox,oy); l.visible=pt.visible; updateThumb(l); }
+      renderLayerList(); redraw(); pushHistory(); document.getElementById('pdfModal').classList.remove('open');
+      toast('PDFを読み込みました('+parts.length+'レイヤー'+(parts.some(p=>!p.visible)?'・非表示のレイヤーあり':'')+')');
+    }catch(err){ console.error(err); toast('PDFの読み込みに失敗しました'); }
+    finally{ btn.disabled=false; btn.textContent=label; } }
+  document.getElementById('pdfSplit').addEventListener('click',e=>{ if(!e.currentTarget.disabled) e.currentTarget.classList.toggle('on'); });
+  document.getElementById('pdfOk').addEventListener('click',importPdf);
+  document.getElementById('pdfCancel').addEventListener('click',()=>document.getElementById('pdfModal').classList.remove('open'));
+
+  // ---------- PSDの読み込み(レイヤーごと) ----------
+  const PSD_BLEND={ 'norm':'source-over','pass':'source-over','mul ':'multiply','scrn':'screen','over':'overlay','lite':'lighten','dark':'darken',
+    'div ':'color-dodge','idiv':'color-burn','hLit':'hard-light','sLit':'soft-light','diff':'difference','hue ':'hue','sat ':'saturation','colr':'color','lum ':'luminosity',
+    'lddg':'screen','lbrn':'color-burn','vLit':'hard-light','lLit':'hard-light','pLit':'hard-light','hMix':'hard-light','smud':'difference','fsub':'difference','fdiv':'color-dodge','dkCl':'darken','lgCl':'lighten','diss':'source-over' };
+  const PSD_BLEND_EXACT=new Set(['norm','pass','mul ','scrn','over','lite','dark','div ','idiv','hLit','sLit','diff','hue ','sat ','colr','lum ']);
+  async function psdInflate(bytes){ const ds=new DecompressionStream('deflate'); const out=await new Response(new Blob([bytes]).stream().pipeThrough(ds)).arrayBuffer(); return new Uint8Array(out); }
+  function packbits(src, so, len, dst, doff, need){ let i=so, end=so+len, o=doff, stop=doff+need;
+    while(i<end && o<stop){ let n=src[i++]; if(n>127) n-=256;
+      if(n>=0){ for(let k=0;k<=n && o<stop;k++) dst[o++]=src[i++]; }
+      else if(n!==-128){ const v=src[i++]; for(let k=0;k<1-n && o<stop;k++) dst[o++]=v; } }
+    return o-doff; }
+  // 1チャンネル分を 8bit に展開
+  async function psdChannel(u8, p, len, w, h, depth, ver){ const out=new Uint8Array(w*h); if(len<2||!w||!h) return out;
+    const comp=(u8[p]<<8)|u8[p+1], bpc=depth/8, rowBytes=w*bpc; let raw;
+    if(comp===0){ raw=u8.subarray(p+2, p+2+rowBytes*h); }
+    else if(comp===1){ const cw=ver===2?4:2, dv=new DataView(u8.buffer,u8.byteOffset); let q=p+2+h*cw; raw=new Uint8Array(rowBytes*h);
+      for(let y=0;y<h;y++){ const n=cw===4?dv.getUint32(p+2+y*4):dv.getUint16(p+2+y*2); packbits(u8,q,n,raw,y*rowBytes,rowBytes); q+=n; } }
+    else if(comp===2||comp===3){ raw=await psdInflate(u8.subarray(p+2,p+len));
+      if(comp===3){ if(bpc===1){ for(let y=0;y<h;y++){ const o=y*rowBytes; for(let x=1;x<w;x++) raw[o+x]=(raw[o+x]+raw[o+x-1])&255; } }
+        else if(bpc===2){ for(let y=0;y<h;y++){ const o=y*rowBytes; for(let x=1;x<w;x++){ const a=o+x*2, b=a-2; const v=(((raw[a]<<8)|raw[a+1])+((raw[b]<<8)|raw[b+1]))&65535; raw[a]=v>>8; raw[a+1]=v&255; } } } } }
+    else return out;
+    if(bpc===1) out.set(raw.subarray(0,w*h));
+    else if(bpc===2){ for(let i=0;i<w*h;i++) out[i]=raw[i*2]; }
+    else if(bpc===4){ const dv=new DataView(raw.buffer,raw.byteOffset); for(let i=0;i<w*h;i++){ const f=dv.getFloat32(i*4); out[i]=Math.max(0,Math.min(255,Math.round(Math.pow(Math.max(0,f),1/2.2)*255))); } }
+    return out; }
+  async function parsePsd(buf){ const u8=new Uint8Array(buf), dv=new DataView(buf); let p=0;
+    const u16=()=>{ const v=dv.getUint16(p); p+=2; return v; }, i16=()=>{ const v=dv.getInt16(p); p+=2; return v; }, u32=()=>{ const v=dv.getUint32(p); p+=4; return v; }, i32=()=>{ const v=dv.getInt32(p); p+=4; return v; };
+    const u64=()=>{ const hi=u32(), lo=u32(); return hi*4294967296+lo; }, str=n=>{ let s=''; for(let i=0;i<n;i++) s+=String.fromCharCode(u8[p+i]); p+=n; return s; };
+    if(str(4)!=='8BPS') throw new Error('PSDではありません');
+    const ver=u16(); p+=6; const nch=u16(), H=u32(), W=u32(), depth=u16(), mode=u16();
+    if(![1,8,16,32].includes(depth)||depth===1) throw new Error(depth+'bitのPSDには対応していません');
+    if(![1,3,4].includes(mode)) throw new Error('この色モード(インデックスなど)のPSDには対応していません。RGBで保存し直してください');
+    { const n_=u32(); p+=n_; }   // カラーモードデータ
+    { const n_=u32(); p+=n_; }   // 画像リソース
+    const lmLen=ver===2?u64():u32(), lmEnd=p+lmLen, layers=[];
+    if(lmLen>0){ const liLen=ver===2?u64():u32(), liEnd=p+liLen;
+      if(liLen>0){ let count=Math.abs(i16()); const recs=[];
+        for(let i=0;i<count;i++){ const r={}; r.top=i32(); r.left=i32(); r.bottom=i32(); r.right=i32(); const cn=u16(); r.ch=[];
+          for(let c=0;c<cn;c++){ const id=i16(), len=ver===2?u64():u32(); r.ch.push({id,len}); }
+          p+=4; r.blend=str(4); r.opacity=u8[p++]; r.clipping=u8[p++]; r.flags=u8[p++]; p++;
+          const exLen=u32(), exEnd=p+exLen;
+          const mLen=u32(); if(mLen>=20){ const mp=p; r.mask={ top:dv.getInt32(mp), left:dv.getInt32(mp+4), bottom:dv.getInt32(mp+8), right:dv.getInt32(mp+12), def:u8[mp+16], flags:u8[mp+17] }; } p+=mLen;
+          { const n_=u32(); p+=n_; }   // ブレンド条件
+          const nl=u8[p]; r.name=new TextDecoder('shift_jis',{fatal:false}).decode(u8.subarray(p+1,p+1+nl)); p+=((nl+1+3)&~3);
+          while(p+12<=exEnd){ const sig=str(4), key=str(4); if(sig!=='8BIM'&&sig!=='8B64'){ break; }
+            const big=ver===2 && ['LMsk','Lr16','Lr32','Layr','Mt16','Mt32','Mtrn','Alph','FMsk','lnk2','FEid','FXid','PxSD'].includes(key);
+            const len=big?u64():u32(), st=p;
+            if(key==='luni'){ const n=dv.getUint32(st); let s=''; for(let k=0;k<n;k++) s+=String.fromCharCode(dv.getUint16(st+4+k*2)); r.name=s.replace(/\0+$/,''); }
+            else if(key==='lsct'||key==='lsdk'){ r.section=dv.getUint32(st); }
+            else if(key==='SoLd'||key==='PlLd'||key==='SoLE') r.smart=true;
+            else if(key==='TySh'||key==='tySh') r.text=true;
+            p=st+len; }
+          p=exEnd; recs.push(r); }
+        for(const r of recs){ const w=r.right-r.left, h=r.bottom-r.top;
+          for(const c of r.ch){ const isMask=c.id===-2, cw=isMask&&r.mask?r.mask.right-r.mask.left:w, chh=isMask&&r.mask?r.mask.bottom-r.mask.top:h;
+            c.data=(c.id<-2||c.len<2)?null:await psdChannel(u8,p,c.len,Math.max(0,cw),Math.max(0,chh),depth,ver); p+=c.len; } }
+        recs.forEach(r=>layers.push(r)); }
+      p=liEnd; }
+    p=lmEnd;
+    // 統合画像(レイヤーが無いPSD用)
+    let merged=null;
+    try{ const comp=u16(), plane=W*H, bpc=depth/8, chData=[];
+      const nUse=Math.min(nch, mode===1?2:mode===4?5:4);
+      if(comp===1){ const cw=ver===2?4:2; let q=p+nch*H*cw; const raw=new Uint8Array(W*bpc*H);
+        for(let c=0;c<nUse;c++){ for(let y=0;y<H;y++){ const n=cw===4?dv.getUint32(p+(c*H+y)*4):dv.getUint16(p+(c*H+y)*2); packbits(u8,q,n,raw,y*W*bpc,W*bpc); q+=n; }
+          const o=new Uint8Array(plane); for(let i=0;i<plane;i++) o[i]=raw[i*bpc]; chData[c]=o; } }
+      else if(comp===0){ for(let c=0;c<nUse;c++){ const o=new Uint8Array(plane), base=p+c*plane*bpc; for(let i=0;i<plane;i++) o[i]=u8[base+i*bpc]; chData[c]=o; } }
+      if(chData.length) merged=chData; }catch(e){ merged=null; }
+    return { W,H,depth,mode,ver,layers,merged }; }
+  function psdToCanvas(psd, w, h, chMap, maskInfo){ const c=document.createElement('canvas'); c.width=Math.max(1,w); c.height=Math.max(1,h); const x=c.getContext('2d'), img=x.createImageData(c.width,c.height), d=img.data, n=w*h;
+    const R=chMap[0], G=chMap[1], B=chMap[2], K=chMap[3], A=chMap[-1];
+    for(let i=0;i<n;i++){ const o=i*4; let r,g,b;
+      if(psd.mode===1){ r=g=b=R?R[i]:0; }
+      else if(psd.mode===4){ const cc=255-(R?R[i]:255), mm=255-(G?G[i]:255), yy=255-(B?B[i]:255), kk=255-(K?K[i]:255); r=255-Math.min(255,cc+kk); g=255-Math.min(255,mm+kk); b=255-Math.min(255,yy+kk); r=Math.max(0,r); g=Math.max(0,g); b=Math.max(0,b); }
+      else { r=R?R[i]:0; g=G?G[i]:0; b=B?B[i]:0; }
+      d[o]=r; d[o+1]=g; d[o+2]=b; d[o+3]=A?A[i]:255; }
+    if(maskInfo){ const m=maskInfo; for(let y=0;y<h;y++) for(let xx=0;xx<w;xx++){ const ax=xx+m.lx, ay=y+m.ly, mx=ax-m.left, my=ay-m.top;
+      const v=(mx>=0&&my>=0&&mx<m.w&&my<m.h)?m.data[my*m.w+mx]:m.def; const o=(y*w+xx)*4+3; d[o]=d[o]*v/255; } }
+    x.putImageData(img,0,0); return c; }
+  // PSDのレイヤー → 描ける形(下から上の順)。グループは「グループ名/レイヤー名」にして平らにする
+  function psdBuildLayers(psd){ const out=[], skipped={adj:0,blend:new Set()};
+    // 上から下へ見ていき、グループの入れ子をたどる
+    const stack=[]; const tmp=[];
+    for(let i=psd.layers.length-1;i>=0;i--){ const r=psd.layers[i];
+      if(r.section===1||r.section===2){ stack.push({ name:r.name, visible:!(r.flags&2), opacity:r.opacity/255 }); continue; }
+      if(r.section===3){ stack.pop(); continue; }
+      const w=r.right-r.left, h=r.bottom-r.top;
+      if(w<=0||h<=0){ skipped.adj++; continue; }   // 調整レイヤーなど(画素なし)
+      const map={}; for(const c of r.ch) if(c.data) map[c.id]=c.data;
+      let mask=null; if(map[-2] && r.mask && !(r.mask.flags&2)){ mask={ data:map[-2], top:r.mask.top, left:r.mask.left, w:r.mask.right-r.mask.left, h:r.mask.bottom-r.mask.top, def:r.mask.def, lx:r.left, ly:r.top }; }
+      const canvas=psdToCanvas(psd,w,h,map,mask);
+      if(!PSD_BLEND_EXACT.has(r.blend)) skipped.blend.add(r.blend.trim());
+      const path=stack.map(g=>g.name);
+      tmp.push({ name:(path.length?path.join('/')+'/':'')+(r.name||'レイヤー'), canvas, x:r.left, y:r.top, opacity:(r.opacity/255)*stack.reduce((a,g)=>a*g.opacity,1),
+        visible:!(r.flags&2) && stack.every(g=>g.visible), mode:PSD_BLEND[r.blend]||'source-over', clip:!!r.clipping }); }
+    tmp.reverse();   // 下から上へ
+    return { list:tmp, skipped }; }
+  let psdPending=null;
+  async function openPsd(buf, name){ toast('PSDを読み込んでいます…'); let psd;
+    try{ psd=await parsePsd(buf); }catch(e){ console.warn(e); toast('PSDを開けませんでした: '+(e.message||e)); return; }
+    const built=psdBuildLayers(psd); psdPending={ psd, built, name:(name||'PSD').replace(/\.ps[db]$/i,'') };
+    const L=built.list, hidden=L.filter(l=>!l.visible).length, clips=L.filter(l=>l.clip).length;
+    document.getElementById('psdInfo').textContent=psd.W+'×'+psd.H+'・'+psd.depth+'bit・'+(L.length?('レイヤー '+L.length+'枚'):'レイヤーなし(統合画像)');
+    const notes=[]; if(hidden) notes.push('非表示 '+hidden+'枚');
+    if(clips) notes.push('クリッピング '+clips+'枚(下のレイヤーの形で切り抜いて読み込みます)');
+    if(built.skipped.adj) notes.push('調整レイヤーなど '+built.skipped.adj+'枚は読み込めません');
+    if(built.skipped.blend.size) notes.push('一部の合成モード('+[...built.skipped.blend].join(', ')+')は近いモードに置きかえます');
+    if(L.some(l=>l.name.includes('/'))) notes.push('グループは「グループ名/レイヤー名」の形で平らにします');
+    document.getElementById('psdNotes').textContent=notes.join('。')+(notes.length?'。':'')+(L.length?'':'このPSDには統合画像しかないため、1枚のレイヤーとして読み込みます。');
+    const sz=document.getElementById('psdSize'); sz.innerHTML='';
+    [['psd','PSDの大きさにする('+psd.W+'×'+psd.H+')'],['fit','今のキャンバス('+CW+'×'+CH+')に収める']].forEach(([v,t])=>{ const o=document.createElement('option'); o.value=v; o.textContent=t; sz.appendChild(o); });
+    if(psd.W>4000||psd.H>4000) sz.value='fit';
+    document.getElementById('psdModal').classList.add('open'); }
+  function importPsd(){ const P=psdPending; if(!P) return; const { psd, built }=P;
+    const size=document.getElementById('psdSize').value, hideHidden=!document.getElementById('psdHidden').classList.contains('on'), replace=document.getElementById('psdReplace').classList.contains('on');
+    endMoveSession(); stopAnim&&stopAnim();
+    let k=1, ox=0, oy=0;
+    if(size==='psd' && psd.W<=4000 && psd.H<=4000){ if(psd.W!==CW||psd.H!==CH){ CW=psd.W; CH=psd.H; resizeAll(); } }
+    else { k=Math.min(CW/psd.W, CH/psd.H); ox=Math.round((CW-psd.W*k)/2); oy=Math.round((CH-psd.H*k)/2); }
+    let list=built.list;
+    if(!list.length && psd.merged){ const map={0:psd.merged[0],1:psd.merged[1],2:psd.merged[2],3:psd.merged[3]}; if(psd.mode===3&&psd.merged[3]) { map[-1]=psd.merged[3]; delete map[3]; }
+      list=[{ name:P.name, canvas:psdToCanvas(psd,psd.W,psd.H,map,null), x:0, y:0, opacity:1, visible:true, mode:'source-over', clip:false }]; }
+    if(hideHidden) list=list.filter(l=>l.visible);
+    if(!list.length){ toast('読み込めるレイヤーがありませんでした'); return; }
+    if(replace){ layers=[]; activeId=null; record={ v:1, w:CW, h:CH, layers:[], events:[] }; history.length=0; histIndex=-1; }
+    // クリッピング: すぐ下の「クリップしていないレイヤー」の形で切り抜く
+    let clipBase=null; const placed=[];
+    for(const src of list){ const l=addLayer({name:src.name}); l.ctx.save(); l.ctx.imageSmoothingQuality='high';
+      l.ctx.drawImage(src.canvas, ox+src.x*k, oy+src.y*k, src.canvas.width*k, src.canvas.height*k); l.ctx.restore();
+      if(src.clip && clipBase){ l.ctx.save(); l.ctx.globalCompositeOperation='destination-in'; l.ctx.drawImage(clipBase.canvas,0,0); l.ctx.restore(); }
+      else if(!src.clip) clipBase=l;
+      l.opacity=Math.round(src.opacity*100)/100; l.mode=src.mode; l.visible=src.visible; updateThumb(l); placed.push(l); }
+    fitZoom(); renderLayerList(); redraw(); syncLayerControls(); pushHistory(); refreshAllThumbs&&refreshAllThumbs();
+    document.getElementById('psdModal').classList.remove('open'); psdPending=null;
+    toast('PSDを読み込みました('+placed.length+'レイヤー)'); }
+  document.getElementById('psdOk').addEventListener('click',importPsd);
+  document.getElementById('psdCancel').addEventListener('click',()=>{ document.getElementById('psdModal').classList.remove('open'); psdPending=null; });
+  ['psdHidden','psdReplace'].forEach(id=>document.getElementById(id).addEventListener('click',e=>e.currentTarget.classList.toggle('on')));
 
   // ---------- init ----------
   function init(){
