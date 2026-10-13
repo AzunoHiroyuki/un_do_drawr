@@ -293,6 +293,13 @@
   .mf-reset .head-btn.danger:hover { background: #fbeceb; }
   #mfToolBtns .shape-btn { font-size: 10.5px; padding: 0 2px; white-space: nowrap; }
   #panelShapes button { font-size: 10.5px; padding: 0 2px; white-space: nowrap; }
+  .panel-palette { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+  .pp-item { position: relative; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--panel); cursor: grab; padding: 4px 2px 2px; display: flex; flex-direction: column; align-items: center; gap: 1px; touch-action: none; user-select: none; }
+  .pp-item:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .pp-item.active { border-color: var(--accent-deep); box-shadow: 0 0 0 2px var(--accent) inset; }
+  .pp-item svg { width: 100%; height: 30px; display: block; }
+  .pp-item span { font-size: 9.5px; font-weight: 700; color: var(--ink-soft); white-space: nowrap; }
+  .pp-ghost { position: fixed; z-index: 300; pointer-events: none; width: 64px; opacity: .85; transform: translate(-50%,-50%); }
   .mf-progress { font-size: 11.5px; font-weight: 700; color: var(--ink-soft); }
 
   .mobile-toggle { display: none; }
@@ -650,12 +657,10 @@
       <div class="field"><div class="field-row"><label>コマの間(縦)</label><span class="val" id="panelGyVal"></span></div><input type="range" id="panelGy" min="0" max="120" value="24"></div>
       <div class="field"><div class="field-row"><label>枠線の太さ</label><span class="val" id="panelLwVal"></span></div><input type="range" id="panelLw" min="1" max="20" value="4"></div>
       <button class="head-btn" id="panelTemplate" style="width:100%;justify-content:center;" title="今のコマをすべて置きかえて、上の割り方で並べる">この割り方で並べ直す</button>
-      <div class="field"><div class="field-row"><label>コマを足す・形を変える</label></div>
-        <div class="gif-sizes" id="panelShapes" style="grid-template-columns:repeat(3,1fr);">
-          <button data-k="edit" title="頂点をドラッグで変形、中をドラッグで移動、辺の○をドラッグで頂点を追加、Alt+頂点クリックで頂点を消す">変形・移動</button>
-          <button data-k="rect">四角</button><button data-k="trap">台形</button><button data-k="itrap">逆台形</button>
-          <button data-k="para">平行四辺形</button><button data-k="slant">斜め切り</button><button data-k="tri">三角</button>
-          <button data-k="cut">角欠け</button><button data-k="ellipse">まる</button>
+      <div class="field"><div class="field-row"><label>コマの素材(キャンバスへドラッグ)</label></div>
+        <div class="panel-palette" id="panelPalette"></div>
+        <div class="gif-sizes" id="panelShapes" style="grid-template-columns:1fr;">
+          <button data-k="edit" title="頂点をドラッグで変形、中をドラッグで移動、外側の青い丸で拡大縮小、辺の○をドラッグで頂点を追加、Alt+頂点クリックで頂点を消す">変形・移動</button>
         </div></div>
       <div class="mf-reset"><span class="mf-progress" id="panelCount" style="flex:1;align-self:center;"></span>
         <button class="head-btn" id="panelDel" title="選んだコマを消す (Delete)">選んだコマを消す</button>
@@ -3312,6 +3317,8 @@
       if(pe.mode!=='edit') return;
       for(let k=0;k<sh.p.length;k+=2){ curctx.fillStyle=on?'#2f96b8':'rgba(255,255,255,.95)'; curctx.strokeStyle='#2f96b8';
         curctx.beginPath(); curctx.rect(sh.p[k]-r,sh.p[k+1]-r,r*2,r*2); curctx.fill(); curctx.stroke(); }
+      if(on){ const bb=shapeBBox(sh); curctx.save(); curctx.strokeStyle='rgba(47,150,184,.6)'; curctx.setLineDash([3/zoom,3/zoom]); curctx.strokeRect(bb[0],bb[1],bb[2]-bb[0],bb[3]-bb[1]); curctx.restore();
+        for(const h of scaleHandles(sh)){ curctx.fillStyle='#2f96b8'; curctx.beginPath(); curctx.arc(h[0],h[1],r*0.9,0,Math.PI*2); curctx.fill(); } }
       if(on && sh.k==='p'){ const n=sh.p.length/2; for(let k=0;k<n;k++){ const a=k*2, b=((k+1)%n)*2, mx=(sh.p[a]+sh.p[b])/2, my=(sh.p[a+1]+sh.p[b+1])/2;
         curctx.fillStyle='rgba(255,255,255,.95)'; curctx.beginPath(); curctx.arc(mx,my,r*0.7,0,Math.PI*2); curctx.fill(); curctx.stroke(); } } });
     curctx.restore();
@@ -3323,6 +3330,9 @@
     return best||[Math.round(x),Math.round(y)]; }
   function panelDown(p, e){ pe.started=true; const r=8/zoom;
     if(pe.mode==='edit'){
+      // 選択中のコマの拡大縮小ハンドル
+      if(pe.sel>=0){ const sh=pe.shapes[pe.sel]; for(const h of scaleHandles(sh)){ if(Math.hypot(h[0]-p.x,h[1]-p.y)<=r*1.3){ const bb=shapeBBox(sh);
+        pe.drag={type:'scale', i:pe.sel, ax:h[2], ay:h[3], w0:(bb[2]-bb[0])||1, h0:(bb[3]-bb[1])||1, sxSign:Math.sign(h[0]-h[2])||1, sySign:Math.sign(h[1]-h[3])||1, orig:sh.p.slice()}; previewPanels(); return; } } }
       // 頂点 → 辺のまん中 → コマの中、の順に探す(選択中のコマを優先)
       const order=pe.shapes.map((_,i)=>i).sort((a,b)=>(b===pe.sel)-(a===pe.sel));
       for(const i of order){ const sh=pe.shapes[i]; for(let k=0;k<sh.p.length;k+=2){ if(Math.hypot(sh.p[k]-p.x,sh.p[k+1]-p.y)<=r){
@@ -3334,19 +3344,57 @@
       for(let i=pe.shapes.length-1;i>=0;i--){ if(ptInShape(pe.shapes[i],p.x,p.y)){ pe.sel=i; pe.drag={type:'move',i,sx:p.x,sy:p.y,orig:pe.shapes[i].p.slice()}; previewPanels(); return; } }
       pe.sel=-1; previewPanels(); return; }
     const [sx,sy]=snapPt(p.x,p.y,-1,-1); pe.drag={type:'place',x0:sx,y0:sy,ghost:null}; }
-  function panelMove(p, shift){ const d=pe.drag; if(!d) return;
+  function panelMove(p, shift){ if(ppDrag) return; const d=pe.drag; if(!d) return;
     if(d.type==='vert'){ const [x,y]=shift?[Math.round(p.x),Math.round(p.y)]:snapPt(p.x,p.y,d.i,d.k); const sh=pe.shapes[d.i]; sh.p[d.k]=x; sh.p[d.k+1]=y;
       if(sh.k==='e'){ const n=sh.p.length; const ox=sh.p[(d.k+4)%n], oy=sh.p[(d.k+5)%n]; sh.p=[ox,oy,x,oy,x,y,ox,y].map(Math.round); d.k=4; }   // 楕円は向かいの角を固定して大きさを変える
       pe.dirty=true; }
+    else if(d.type==='scale'){ let fx=Math.max(0.05,((p.x-d.ax)*d.sxSign)/d.w0), fy=Math.max(0.05,((p.y-d.ay)*d.sySign)/d.h0);
+      if(shift){ const f=Math.max(fx,fy); fx=fy=f; }
+      const sh=pe.shapes[d.i]; for(let k=0;k<sh.p.length;k+=2){ sh.p[k]=Math.round(d.ax+(d.orig[k]-d.ax)*fx); sh.p[k+1]=Math.round(d.ay+(d.orig[k+1]-d.ay)*fy); } pe.dirty=true; }
     else if(d.type==='move'){ const dx=Math.round(p.x-d.sx), dy=Math.round(p.y-d.sy); const sh=pe.shapes[d.i]; for(let k=0;k<sh.p.length;k+=2){ sh.p[k]=d.orig[k]+dx; sh.p[k+1]=d.orig[k+1]+dy; } pe.dirty=true; }
     else if(d.type==='place'){ let [x,y]=snapPt(p.x,p.y,-1,-1); if(shift){ const m=Math.max(Math.abs(x-d.x0),Math.abs(y-d.y0)); x=d.x0+Math.sign(x-d.x0||1)*m; y=d.y0+Math.sign(y-d.y0||1)*m; }
       const x0=Math.min(d.x0,x), x1=Math.max(d.x0,x), y0=Math.min(d.y0,y), y1=Math.max(d.y0,y); d.ghost=(x1-x0>4&&y1-y0>4)?makeShape(pe.mode,x0,y0,x1,y1):null; }
     previewPanels(); }
-  function panelUp(){ const d=pe.drag; pe.drag=null; if(!d) return;
+  function panelUp(){ if(ppDrag) return; const d=pe.drag; pe.drag=null; if(!d) return;
     if(d.type==='place'){ if(d.ghost && Math.abs(d.ghost.p[2]-d.ghost.p[0])+Math.abs(d.ghost.p[5]-d.ghost.p[1])>16){ pe.shapes.push(d.ghost); pe.sel=pe.shapes.length-1; pe.dirty=true; } else toast('ドラッグしてコマの大きさを決めてください'); }
     previewPanels(); }
-  function setPanelMode(m){ pe.mode=m; document.querySelectorAll('#panelShapes button').forEach(b=>b.classList.toggle('active',b.dataset.k===m)); input.style.cursor=m==='edit'?'default':CROSSHAIR; previewPanels(); }
+  function setPanelMode(m){ pe.mode=m; document.querySelectorAll('#panelShapes button').forEach(b=>b.classList.toggle('active',b.dataset.k===m));
+    document.querySelectorAll('#panelPalette .pp-item').forEach(b=>b.classList.toggle('active',b.dataset.k===m)); input.style.cursor=m==='edit'?'default':CROSSHAIR; previewPanels(); }
+  // ---- 素材パレット: 形の絵をキャンバスへドラッグして置く(クリックだけなら「ドラッグで大きさを決めて置く」モード) ----
+  const PANEL_KINDS=[['rect','四角'],['trap','台形'],['itrap','逆台形'],['para','平行四辺形'],['slant','斜め切り'],['tri','三角'],['cut','角欠け'],['ellipse','まる']];
+  const PANEL_DEF_RATIO={ rect:[0.42,0.3], trap:[0.42,0.3], itrap:[0.42,0.3], para:[0.46,0.28], slant:[0.42,0.32], tri:[0.34,0.34], cut:[0.38,0.34], ellipse:[0.34,0.34] };
+  function shapeSvg(k){ const sh=makeShape(k,6,6,94,58), p=sh.p;
+    const d = sh.k==='e' ? '<ellipse cx="50" cy="32" rx="44" ry="26"/>' : '<polygon points="'+p.join(' ')+'"/>';
+    return '<svg viewBox="0 0 100 64" fill="var(--panel-2)" stroke="currentColor" stroke-width="4" stroke-linejoin="miter">'+d+'</svg>'; }
+  function defaultShapeAt(k, cx, cy){ const r=PANEL_DEF_RATIO[k]||[0.4,0.3]; let w=Math.round(CW*r[0]), h=Math.round(CH*r[1]);
+    if(k==='tri'||k==='ellipse'){ const m=Math.min(w,h); w=h=m; }
+    let x0=Math.round(cx-w/2), y0=Math.round(cy-h/2); x0=Math.max(0,Math.min(CW-w,x0)); y0=Math.max(0,Math.min(CH-h,y0));
+    return makeShape(k,x0,y0,x0+w,y0+h); }
+  let ppDrag=null;   // {k, sx, sy, moved, ghost(el)}
+  function canvasPosFromClient(cx,cy){ const r=input.getBoundingClientRect(); if(cx<r.left||cy<r.top||cx>r.right||cy>r.bottom) return null; return { x:(cx-r.left)/zoom, y:(cy-r.top)/zoom }; }
+  function buildPanelPalette(){ const box=document.getElementById('panelPalette'); box.innerHTML='';
+    for(const [k,label] of PANEL_KINDS){ const it=document.createElement('div'); it.className='pp-item'; it.dataset.k=k;
+      it.title=label+': キャンバスへドラッグして置く / クリックで「ドラッグして大きさを決める」モード';
+      it.innerHTML=shapeSvg(k)+'<span>'+label+'</span>';
+      it.addEventListener('pointerdown',e=>{ e.preventDefault(); it.setPointerCapture&&it.setPointerCapture(e.pointerId); ppDrag={k, sx:e.clientX, sy:e.clientY, moved:false, ghost:null}; });
+      it.addEventListener('pointermove',e=>{ const d=ppDrag; if(!d) return;
+        if(!d.moved && Math.hypot(e.clientX-d.sx,e.clientY-d.sy)>6){ d.moved=true; const g=document.createElement('div'); g.className='pp-ghost'; g.innerHTML=shapeSvg(d.k); g.style.color=tool.color; document.body.appendChild(g); d.ghost=g; }
+        if(!d.moved) return; d.ghost.style.left=e.clientX+'px'; d.ghost.style.top=e.clientY+'px';
+        const q=canvasPosFromClient(e.clientX,e.clientY); d.ghost.style.display=q?'none':'block';
+        pe.drag = q ? {type:'place', ghost:defaultShapeAt(d.k,q.x,q.y)} : null; previewPanels(); });
+      const end=e=>{ const d=ppDrag; ppDrag=null; if(!d) return; if(d.ghost) d.ghost.remove();
+        if(!d.moved){ setPanelMode(d.k); toast('キャンバスをドラッグして「'+PANEL_KINDS.find(x=>x[0]===d.k)[1]+'」のコマを置けます'); return; }
+        const q=e.type==='pointerup'?canvasPosFromClient(e.clientX,e.clientY):null; pe.drag=null;
+        if(q){ pe.started=true; pe.shapes.push(defaultShapeAt(d.k,q.x,q.y)); pe.sel=pe.shapes.length-1; pe.dirty=true; setPanelMode('edit');
+          toast('コマを置きました。頂点や外側の青い丸で形・大きさを変えられます'); }
+        else previewPanels(); };
+      it.addEventListener('pointerup',end); it.addEventListener('pointercancel',end);
+      box.appendChild(it); } }
+  // 選んだコマの拡大縮小ハンドル(外接四角の角の少し外側)
+  function shapeBBox(sh){ let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(let i=0;i<sh.p.length;i+=2){ x0=Math.min(x0,sh.p[i]); x1=Math.max(x1,sh.p[i]); y0=Math.min(y0,sh.p[i+1]); y1=Math.max(y1,sh.p[i+1]); } return [x0,y0,x1,y1]; }
+  function scaleHandles(sh){ const [x0,y0,x1,y1]=shapeBBox(sh), o=14/zoom; return [[x0-o,y0-o,x1,y1],[x1+o,y0-o,x0,y1],[x1+o,y1+o,x0,y0],[x0-o,y1+o,x1,y0]]; }   // [ハンドルx,y, 固定する角x,y]
   function deletePanel(){ if(pe.sel<0) return; pe.shapes.splice(pe.sel,1); pe.sel=-1; pe.dirty=true; previewPanels(); }
+  buildPanelPalette();
   function panelEnter(){ if(!pe.started) panelTemplate(); else previewPanels(); setPanelMode(pe.mode); }
   function applyPanels(){ endMoveSession(); if(!pe.shapes.length){ toast('配置するコマがありません'); return; }
     const p=tool.panel, ev={ t:'panels', shapes:JSON.parse(JSON.stringify(pe.shapes.map(s=>({k:s.k,p:s.p})))), lw:p.lw, color:tool.color, outside:p.outside, op:1 };
