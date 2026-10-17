@@ -293,6 +293,8 @@
   .mf-reset .head-btn.danger { color: #c9483a; border-color: #e3b1aa; }
   .mf-reset .head-btn.danger:hover { background: #fbeceb; }
   #mfToolBtns .shape-btn { font-size: 10.5px; padding: 0 2px; white-space: nowrap; }
+  #panelXform button { font-size: 10.5px; padding: 0 2px; white-space: nowrap; }
+  #panelXform button:disabled { opacity: .4; cursor: default; }
   #panelShapes button { font-size: 10.5px; padding: 0 2px; white-space: nowrap; }
   .panel-palette { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
   .pp-item { position: relative; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--panel); cursor: grab; padding: 4px 2px 2px; display: flex; flex-direction: column; align-items: center; gap: 1px; touch-action: none; user-select: none; }
@@ -667,6 +669,12 @@
         <div class="gif-sizes" id="panelShapes" style="grid-template-columns:1fr;">
           <button data-k="edit" title="頂点をドラッグで変形、中をドラッグで移動、外側の青い丸で拡大縮小、辺の○をドラッグで頂点を追加、Alt+頂点クリックで頂点を消す">変形・移動</button>
         </div></div>
+      <div class="field"><div class="field-row"><label>選んだコマの向き</label></div>
+        <div class="gif-sizes" id="panelXform" style="grid-template-columns:repeat(4,1fr);">
+          <button data-x="fh" title="左右反転 (H)">⇆ 左右</button><button data-x="fv" title="上下反転 (V)">⇅ 上下</button>
+          <button data-x="rl" title="左へ90°回転 ([)">↺ 90°</button><button data-x="rr" title="右へ90°回転 (])">↻ 90°</button>
+        </div>
+        <div class="rz-note" style="margin-top:2px;">自由に回すときは、コマの上の丸いハンドルをドラッグ(Shiftで15°ずつ)。</div></div>
       <div class="mf-reset"><span class="mf-progress" id="panelCount" style="flex:1;align-self:center;"></span>
         <button class="head-btn" id="panelDel" title="選んだコマを消す (Delete)">選んだコマを消す</button>
         <button class="head-btn" id="panelClearAll">全部消す</button></div>
@@ -3363,9 +3371,11 @@
   // コマ枠の描画。ev.shapes=[{k:'p'(多角形)|'e'(楕円), p:[x,y,...]}]。古い記録の ev.rects にも対応
   function panelShapes(ev){ if(ev.shapes) return ev.shapes; return (ev.rects||[]).map(r=>({k:'p',p:[r[0],r[1],r[0]+r[2],r[1],r[0]+r[2],r[1]+r[3],r[0],r[1]+r[3]]})); }
   function shapePath(x, sh){ const p=sh.p;
-    if(sh.k==='e'){ let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(let i=0;i<p.length;i+=2){ x0=Math.min(x0,p[i]); x1=Math.max(x1,p[i]); y0=Math.min(y0,p[i+1]); y1=Math.max(y1,p[i+1]); }
-      x.moveTo(x1,(y0+y1)/2); x.ellipse((x0+x1)/2,(y0+y1)/2,Math.max(1,(x1-x0)/2),Math.max(1,(y1-y0)/2),0,0,Math.PI*2); x.closePath(); return; }
+    if(sh.k==='e'){ const E=ellipseOf(sh); x.moveTo(E.cx+Math.cos(E.a)*E.rx,E.cy+Math.sin(E.a)*E.rx); x.ellipse(E.cx,E.cy,E.rx,E.ry,E.a,0,Math.PI*2); x.closePath(); return; }
     x.moveTo(p[0],p[1]); for(let i=2;i<p.length;i+=2) x.lineTo(p[i],p[i+1]); x.closePath(); }
+  // 楕円のコマは「外接する四角の4つの角」で持つ(回転してもよい)
+  function ellipseOf(sh){ const p=sh.p, cx=(p[0]+p[2]+p[4]+p[6])/4, cy=(p[1]+p[3]+p[5]+p[7])/4;
+    return { cx, cy, rx:Math.max(1,Math.hypot(p[2]-p[0],p[3]-p[1])/2), ry:Math.max(1,Math.hypot(p[4]-p[2],p[5]-p[3])/2), a:Math.atan2(p[3]-p[1],p[2]-p[0]) }; }
   function renderPanels(ctx, ev, W, H){
     const t=document.createElement('canvas'); t.width=W; t.height=H; const x=t.getContext('2d'), shapes=panelShapes(ev);
     if(ev.outside){ x.fillStyle='#ffffff'; x.fillRect(0,0,W,H); x.globalCompositeOperation='destination-out';
@@ -3403,18 +3413,27 @@
       for(let k=0;k<sh.p.length;k+=2){ curctx.fillStyle=on?'#2f96b8':'rgba(255,255,255,.95)'; curctx.strokeStyle='#2f96b8';
         curctx.beginPath(); curctx.rect(sh.p[k]-r,sh.p[k+1]-r,r*2,r*2); curctx.fill(); curctx.stroke(); }
       if(on){ const bb=shapeBBox(sh); curctx.save(); curctx.strokeStyle='rgba(47,150,184,.6)'; curctx.setLineDash([3/zoom,3/zoom]); curctx.strokeRect(bb[0],bb[1],bb[2]-bb[0],bb[3]-bb[1]); curctx.restore();
-        for(const h of scaleHandles(sh)){ curctx.fillStyle='#2f96b8'; curctx.beginPath(); curctx.arc(h[0],h[1],r*0.9,0,Math.PI*2); curctx.fill(); } }
+        for(const h of scaleHandles(sh)){ curctx.fillStyle='#2f96b8'; curctx.beginPath(); curctx.arc(h[0],h[1],r*0.9,0,Math.PI*2); curctx.fill(); }
+        const rh=rotHandle(sh); curctx.save(); curctx.strokeStyle='#2f96b8'; curctx.setLineDash([]); curctx.beginPath(); curctx.moveTo((bb[0]+bb[2])/2,bb[1]); curctx.lineTo(rh[0],rh[1]); curctx.stroke();
+        curctx.fillStyle='#ffffff'; curctx.lineWidth=2/zoom; curctx.beginPath(); curctx.arc(rh[0],rh[1],r*1.1,0,Math.PI*2); curctx.fill(); curctx.stroke();
+        curctx.beginPath(); curctx.arc(rh[0],rh[1],r*0.55,-Math.PI*0.9,Math.PI*0.4); curctx.stroke();
+        if(pe.drag && pe.drag.type==='rot' && pe.drag.deg!=null){ curctx.fillStyle='#2f96b8'; curctx.font=(12/zoom)+'px sans-serif'; curctx.fillText(pe.drag.deg+'°', rh[0]+r*1.6, rh[1]+4/zoom); }
+        curctx.restore(); }
       if(on && sh.k==='p'){ const n=sh.p.length/2; for(let k=0;k<n;k++){ const a=k*2, b=((k+1)%n)*2, mx=(sh.p[a]+sh.p[b])/2, my=(sh.p[a+1]+sh.p[b+1])/2;
         curctx.fillStyle='rgba(255,255,255,.95)'; curctx.beginPath(); curctx.arc(mx,my,r*0.7,0,Math.PI*2); curctx.fill(); curctx.stroke(); } } });
     curctx.restore();
     document.getElementById('panelCount').textContent=pe.shapes.length?(pe.shapes.length+'コマ'+(pe.sel>=0?'・'+(pe.sel+1)+'番を選択中':'')):'コマがありません';
-    document.getElementById('panelDel').disabled=pe.sel<0; }
+    document.getElementById('panelDel').disabled=pe.sel<0;
+    document.querySelectorAll('#panelXform button').forEach(b=>b.disabled=pe.sel<0); }
   function ptInShape(sh,x,y){ const c=curctx; c.beginPath(); shapePath(c,sh); return c.isPointInPath(x*1,y*1); }
   function snapPt(x,y,skipShape,skipIdx){ const lim=10/zoom; let best=null, bd=lim;
     pe.shapes.forEach((sh,i)=>{ for(let k=0;k<sh.p.length;k+=2){ if(i===skipShape && k===skipIdx) continue; const d=Math.hypot(sh.p[k]-x,sh.p[k+1]-y); if(d<bd){ bd=d; best=[sh.p[k],sh.p[k+1]]; } } });
     return best||[Math.round(x),Math.round(y)]; }
   function panelDown(p, e){ pe.started=true; const r=8/zoom;
     if(pe.mode==='edit'){
+      // 選択中のコマの回転ハンドル(上のまん中の丸)
+      if(pe.sel>=0){ const sh=pe.shapes[pe.sel], h=rotHandle(sh); if(Math.hypot(h[0]-p.x,h[1]-p.y)<=r*1.4){ const c=shapeCenter(sh);
+        pe.drag={type:'rot', i:pe.sel, cx:c[0], cy:c[1], a0:Math.atan2(p.y-c[1],p.x-c[0]), orig:sh.p.slice()}; previewPanels(); return; } }
       // 選択中のコマの拡大縮小ハンドル
       if(pe.sel>=0){ const sh=pe.shapes[pe.sel]; for(const h of scaleHandles(sh)){ if(Math.hypot(h[0]-p.x,h[1]-p.y)<=r*1.3){ const bb=shapeBBox(sh);
         pe.drag={type:'scale', i:pe.sel, ax:h[2], ay:h[3], w0:(bb[2]-bb[0])||1, h0:(bb[3]-bb[1])||1, sxSign:Math.sign(h[0]-h[2])||1, sySign:Math.sign(h[1]-h[3])||1, orig:sh.p.slice()}; previewPanels(); return; } } }
@@ -3431,8 +3450,14 @@
     const [sx,sy]=snapPt(p.x,p.y,-1,-1); pe.drag={type:'place',x0:sx,y0:sy,ghost:null}; }
   function panelMove(p, shift){ if(ppDrag) return; const d=pe.drag; if(!d) return;
     if(d.type==='vert'){ const [x,y]=shift?[Math.round(p.x),Math.round(p.y)]:snapPt(p.x,p.y,d.i,d.k); const sh=pe.shapes[d.i]; sh.p[d.k]=x; sh.p[d.k+1]=y;
-      if(sh.k==='e'){ const n=sh.p.length; const ox=sh.p[(d.k+4)%n], oy=sh.p[(d.k+5)%n]; sh.p=[ox,oy,x,oy,x,y,ox,y].map(Math.round); d.k=4; }   // 楕円は向かいの角を固定して大きさを変える
+      if(sh.k==='e'){ const n=sh.p.length, ox=sh.p[(d.k+4)%n], oy=sh.p[(d.k+5)%n], a=d.ea!=null?d.ea:(d.ea=Math.atan2(sh.p[3]-sh.p[1],sh.p[2]-sh.p[0])), c=Math.cos(a), s2=Math.sin(a);
+        // 向かいの角を固定し、回転した向きのまま大きさを変える
+        const lx=(x-ox)*c+(y-oy)*s2, ly=-(x-ox)*s2+(y-oy)*c, X0=Math.min(0,lx), X1=Math.max(0,lx), Y0=Math.min(0,ly), Y1=Math.max(0,ly);
+        const g=(u,v)=>[ox+u*c-v*s2, oy+u*s2+v*c]; const q=[...g(X0,Y0),...g(X1,Y0),...g(X1,Y1),...g(X0,Y1)].map(Math.round); sh.p=q;
+        let bk=0,bd=1e9; for(let k=0;k<8;k+=2){ const dd=Math.hypot(q[k]-x,q[k+1]-y); if(dd<bd){ bd=dd; bk=k; } } d.k=bk; }
       pe.dirty=true; }
+    else if(d.type==='rot'){ let a=Math.atan2(p.y-d.cy,p.x-d.cx)-d.a0; if(shift) a=Math.round(a/(Math.PI/12))*(Math.PI/12);
+      const sh=pe.shapes[d.i]; sh.p=rotatePts(d.orig,d.cx,d.cy,a); pe.dirty=true; d.deg=Math.round(a*180/Math.PI); }
     else if(d.type==='scale'){ let fx=Math.max(0.05,((p.x-d.ax)*d.sxSign)/d.w0), fy=Math.max(0.05,((p.y-d.ay)*d.sySign)/d.h0);
       if(shift){ const f=Math.max(fx,fy); fx=fy=f; }
       const sh=pe.shapes[d.i]; for(let k=0;k<sh.p.length;k+=2){ sh.p[k]=Math.round(d.ax+(d.orig[k]-d.ax)*fx); sh.p[k+1]=Math.round(d.ay+(d.orig[k+1]-d.ay)*fy); } pe.dirty=true; }
@@ -3478,6 +3503,17 @@
   // 選んだコマの拡大縮小ハンドル(外接四角の角の少し外側)
   function shapeBBox(sh){ let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(let i=0;i<sh.p.length;i+=2){ x0=Math.min(x0,sh.p[i]); x1=Math.max(x1,sh.p[i]); y0=Math.min(y0,sh.p[i+1]); y1=Math.max(y1,sh.p[i+1]); } return [x0,y0,x1,y1]; }
   function scaleHandles(sh){ const [x0,y0,x1,y1]=shapeBBox(sh), o=14/zoom; return [[x0-o,y0-o,x1,y1],[x1+o,y0-o,x0,y1],[x1+o,y1+o,x0,y0],[x0-o,y1+o,x1,y0]]; }   // [ハンドルx,y, 固定する角x,y]
+  // ---- 反転・回転 ----
+  function shapeCenter(sh){ const b=shapeBBox(sh); return [(b[0]+b[2])/2,(b[1]+b[3])/2]; }
+  function rotHandle(sh){ const b=shapeBBox(sh); return [(b[0]+b[2])/2, b[1]-30/zoom]; }
+  function rotatePts(pts,cx,cy,a){ const c=Math.cos(a), s2=Math.sin(a), o=[]; for(let k=0;k<pts.length;k+=2){ const dx=pts[k]-cx, dy=pts[k+1]-cy; o.push(Math.round(cx+dx*c-dy*s2), Math.round(cy+dx*s2+dy*c)); } return o; }
+  function transformSel(kind){ if(pe.sel<0){ toast('先にコマを選んでください(変形・移動でコマをクリック)'); return; }
+    const sh=pe.shapes[pe.sel], [cx,cy]=shapeCenter(sh);
+    if(kind==='fh'){ for(let k=0;k<sh.p.length;k+=2) sh.p[k]=Math.round(cx*2-sh.p[k]); }
+    else if(kind==='fv'){ for(let k=1;k<sh.p.length;k+=2) sh.p[k]=Math.round(cy*2-sh.p[k]); }
+    else if(kind==='rl') sh.p=rotatePts(sh.p,cx,cy,-Math.PI/2);
+    else if(kind==='rr') sh.p=rotatePts(sh.p,cx,cy,Math.PI/2);
+    pe.dirty=true; previewPanels(); }
   // 割り方で並べただけ(まだ手を加えていない)のコマは、素材を置いたときに消す
   function dropTemplateIfUntouched(){ if(!pe.dirty){ pe.shapes=[]; pe.sel=-1; } }
   function deletePanel(){ if(pe.sel<0) return; pe.shapes.splice(pe.sel,1); pe.sel=-1; pe.dirty=true; previewPanels(); }
@@ -3560,9 +3596,12 @@
     if(pe.dirty && pe.shapes.length) askConfirm('今のコマを置きかえて並べ直しますか？','並べ直す',go); else go(); });
   document.querySelectorAll('#panelShapes button').forEach(b=>b.addEventListener('click',()=>setPanelMode(b.dataset.k)));
   document.getElementById('panelDel').addEventListener('click',deletePanel);
+  document.querySelectorAll('#panelXform button').forEach(b=>b.addEventListener('click',()=>transformSel(b.dataset.x)));
   document.getElementById('panelClearAll').addEventListener('click',()=>{ if(!pe.shapes.length) return; pe.shapes=[]; pe.sel=-1; pe.dirty=true; previewPanels(); });
   window.addEventListener('keydown',e=>{ if(tool.name!=='panel'||e.target.tagName==='INPUT') return;
     if((e.key==='Delete'||e.key==='Backspace') && pe.sel>=0){ e.preventDefault(); e.stopImmediatePropagation(); deletePanel(); }
+    else if(pe.sel>=0 && !e.ctrlKey && !e.metaKey && ['h','v','[',']'].includes(e.key.toLowerCase())){ e.preventDefault(); e.stopImmediatePropagation();
+      transformSel({h:'fh',v:'fv','[':'rl',']':'rr'}[e.key.toLowerCase()]); }
     else if(e.key==='Escape' && pe.sel>=0){ e.stopImmediatePropagation(); pe.sel=-1; previewPanels(); } }, true);
   document.getElementById('panelOutside').addEventListener('click',()=>{ tool.panel.outside=!tool.panel.outside; syncComicUI(); previewPanels(); });
   document.getElementById('panelApply').addEventListener('click',applyPanels);
