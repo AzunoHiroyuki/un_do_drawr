@@ -650,6 +650,7 @@
       <div class="opt-title">コマ割り</div>
       <div class="field"><div class="field-row"><label>割り方(上の段から)</label></div>
         <select class="layer-mode" id="panelPreset">
+          <option value="none">なし(素材から置く)</option>
           <option value="p1">1コマ</option><option value="p2">2段</option><option value="p3">3段</option><option value="p4">4コマ(縦4段)</option>
           <option value="p22">2×2</option><option value="p12">1 / 2</option><option value="p21">2 / 1</option><option value="p121">1 / 2 / 1</option>
           <option value="p212">2 / 1 / 2</option><option value="p323">2 / 3 / 2</option><option value="custom">自分で決める</option>
@@ -3351,8 +3352,8 @@
     if(used) e.preventDefault(); e.stopImmediatePropagation(); }, true);
 
   // ---------- コマ割り・吹き出し ----------
-  const PANEL_PRESETS={ p1:[1], p2:[1,1], p3:[1,1,1], p4:[1,1,1,1], p22:[2,2], p12:[1,2], p21:[2,1], p121:[1,2,1], p212:[2,1,2], p323:[2,3,2] };
-  tool.panel={ preset:'p121', custom:'1,2,1', margin:40, gx:16, gy:24, lw:4, outside:true };
+  const PANEL_PRESETS={ none:[], p1:[1], p2:[1,1], p3:[1,1,1], p4:[1,1,1,1], p22:[2,2], p12:[1,2], p21:[2,1], p121:[1,2,1], p212:[2,1,2], p323:[2,3,2] };
+  tool.panel={ preset:'none', custom:'1,2,1', margin:40, gx:16, gy:24, lw:4, outside:true };
   tool.bubble={ shape:'ellipse', lw:3, fill:'white', tail:true };
   function panelRows(){ const p=tool.panel; if(p.preset!=='custom') return PANEL_PRESETS[p.preset];
     const r=(p.custom||'').split(/[,、\s]+/).map(v=>parseInt(v,10)).filter(v=>v>0&&v<=8).slice(0,8); return r.length?r:[1]; }
@@ -3541,13 +3542,16 @@
   // オプションのUI
   function syncComicUI(){ const p=tool.panel, b=tool.bubble;
     document.getElementById('panelPreset').value=p.preset; document.getElementById('panelCustomField').style.display=p.preset==='custom'?'flex':'none';
+    const none=p.preset==='none';   // 「なし」のときは並べ方の設定を隠す
+    ['panelMargin','panelGx','panelGy'].forEach(id=>{ const f=document.getElementById(id).closest('.field'); if(f) f.style.display=none?'none':'flex'; });
+    document.getElementById('panelTemplate').style.display=none?'none':'';
     document.getElementById('panelCustom').value=p.custom;
     [['panelMargin','margin',' px'],['panelGx','gx',' px'],['panelGy','gy',' px'],['panelLw','lw',' px']].forEach(([id,k,u])=>{ document.getElementById(id).value=p[k]; document.getElementById(id+'Val').textContent=p[k]+u; });
     document.getElementById('panelOutside').classList.toggle('on',p.outside);
     document.querySelectorAll('#bubbleShapes button').forEach(x=>x.classList.toggle('active',x.dataset.s===b.shape));
     document.getElementById('bubbleLw').value=b.lw; document.getElementById('bubbleLwVal').textContent=b.lw+' px';
     document.getElementById('bubbleFill').classList.toggle('on',b.fill==='white'); document.getElementById('bubbleTail').classList.toggle('on',b.tail); }
-  const tplChanged=()=>{ if(!pe.dirty) panelTemplate(); else previewPanels(); };   // まだ手を加えていなければ、その場で並べ直す
+  const tplChanged=()=>{ if(!pe.dirty || !pe.shapes.length) panelTemplate(); else { previewPanels(); if(tool.panel.preset!=='none') toast('置いたコマがあるので、割り方は「この割り方で並べ直す」で反映されます'); } };   // まだ手を加えていなければ、その場で並べ直す
   document.getElementById('panelPreset').addEventListener('change',e=>{ tool.panel.preset=e.target.value; syncComicUI(); tplChanged(); });
   document.getElementById('panelCustom').addEventListener('input',e=>{ tool.panel.custom=e.target.value; tplChanged(); });
   [['panelMargin','margin'],['panelGx','gx'],['panelGy','gy']].forEach(([id,k])=>document.getElementById(id).addEventListener('input',e=>{ tool.panel[k]=+e.target.value; syncComicUI(); tplChanged(); }));
